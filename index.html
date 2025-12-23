@@ -64,7 +64,6 @@
         html {
             height: 100%;
             overflow: hidden;
-            position: fixed;
             width: 100%;
         }
         
@@ -76,7 +75,6 @@
             overflow: hidden;
             height: 100vh;
             width: 100vw;
-            position: fixed;
             line-height: 1.5;
             transition: background-color 0.3s ease, color 0.3s ease;
         }
@@ -583,6 +581,7 @@
             }
             
             .stats-panel {
+                position: fixed !important;
                 left: 10px;
                 right: 10px;
                 bottom: 10px;
@@ -590,6 +589,8 @@
                 padding: 10px 12px;
                 gap: 12px;
                 font-size: 0.85rem;
+                z-index: 500;
+                display: flex !important;
             }
             
             .stat-item {
