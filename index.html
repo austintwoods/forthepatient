@@ -554,8 +554,12 @@
         /* Responsive design */
         @media (max-width: 768px) {
             .main-content {
-                height: 100vh;
-                height: 100dvh; /* Dynamic viewport height for mobile browsers */
+                height: calc(100vh - 60px);
+                padding-bottom: 70px; /* Space for stats panel */
+            }
+            
+            #map {
+                bottom: 70px; /* Leave room for stats panel */
             }
             
             .search-panel {
@@ -586,20 +590,21 @@
             }
             
             .stats-panel {
-                position: absolute !important;
-                left: 10px !important;
-                right: 10px !important;
-                bottom: 10px !important;
-                bottom: max(10px, env(safe-area-inset-bottom)) !important;
-                width: calc(100% - 20px) !important;
-                padding: 10px 12px !important;
-                gap: 12px !important;
+                position: fixed !important;
+                left: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                width: 100% !important;
+                padding: 12px 15px !important;
+                gap: 10px !important;
                 font-size: 0.85rem !important;
                 z-index: 500 !important;
                 display: flex !important;
-                pointer-events: auto !important;
-                visibility: visible !important;
-                opacity: 1 !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
+                border-left: none !important;
+                border-right: none !important;
+                border-bottom: none !important;
             }
             
             .stat-item {
