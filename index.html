@@ -1,19 +1,86 @@
+<!--
+  CHANGELOG v3.0 (Session H — April 2026)
+  =========================================
+  From v2.0 (Session G):
+
+  DESKTOP:
+  - [D1]  Marker clustering via Leaflet.markercluster with classification-colored clusters and pie-chart distribution
+  - [D2]  Viewport radius computed from map.getBounds() diagonal, clamped 2–2000 mi. Replaces zoom lookup table.
+  - [D3]  Specialty chips auto-disable when no hospital type selected; tooltip "applies to hospitals only"
+  - [D4]  URL state: center, zoom, types, min score, specialties, facility ID, theme synced to query string.
+          replaceState on pan/zoom, pushState on facility open. popstate wired for back-button.
+  - [D5]  Resizable detail panel: drag left edge 320–600px. Pin toggle docks vs floats.
+  - [D6]  Empty state: illustrated message + "clear filters" button when zero results.
+  - [D7]  Error state: retry button + status.supabase.com link on Supabase failures.
+  - [D8]  Loading skeleton on detail panel (shimmering rectangles) replaces spinner.
+  - [D9]  Clickable legend: click classification row to filter. Shift-click for multi-select.
+  - [D10] Sort by score / distance toggle on results.
+  - [D11] State navigator: autocomplete input to fly to any US state.
+  - [D12] Full keyboard navigation: tab order, arrow keys in dropdowns, Enter to select, Esc to close, / to focus search.
+  - [D13] ARIA labels on all interactive controls, aria-live on stats/results, role=dialog on detail panel, heading hierarchy.
+  - [D14] Visible :focus-visible outlines (accent color, 3px halo).
+  - [D15] Copy-link + share buttons on detail panel header.
+  - [D16] Print stylesheet: detail panel only, no map/chrome, methodology URL.
+  - [D17] Dynamic <title>: "{Facility Name} — Quality Score | ForThePatient" when detail open.
+  - [D18] Analytics placeholder: Plausible script tag (privacy-respecting, no cookies).
+
+  MOBILE:
+  - [M1]  Draggable bottom sheet for filters AND detail. Three snaps: peek (64px), half (50vh), full (90vh). Visual handle.
+  - [M2]  Safe area inset handling: env(safe-area-inset-*) on all edges.
+  - [M3]  All touch targets ≥ 44×44pt. Increased marker hit zone.
+  - [M4]  Soft keyboard handling: visualViewport API, results rendered above input when needed.
+  - [M5]  No mid-gesture refetch: moveend/zoomend delayed while touch active.
+  - [M6]  Search panel scroll isolation: touch-action: pan-y on scrollable panels.
+  - [M7]  Haptic feedback on chip toggle + sheet snap (gated behind preference).
+  - [M8]  Leaflet popups hidden on mobile; tap opens bottom sheet directly.
+  - [M9]  Legal links inside About drawer on mobile (footer hidden).
+  - [M10] Landscape: header 40px, subtitle hidden, compact stats.
+  - [M11] Overscroll-behavior: none on html/body.
+  - [M12] Offline detection: toast on offline, suppress query errors.
+  - [M13] requestIdleCallback for non-critical init work.
+
+  ACCESSIBILITY:
+  - [A1] WCAG 2.1 AA target across entire app.
+  - [A2] All interactive controls have aria-labels.
+  - [A3] aria-live regions on stats and result counts.
+  - [A4] role=dialog + aria-modal on detail panel.
+  - [A5] Proper heading hierarchy (h1 > h2 > h3).
+  - [A6] Visible :focus-visible outlines with accent color 3px halo.
+  - [A7] Color contrast fixes for dark mode average badge.
+
+  PERFORMANCE:
+  - [P1] Canvas renderer for markers (preferCanvas: true retained).
+  - [P2] Cluster layer handles 500+ markers efficiently.
+  - [P3] requestIdleCallback defers non-critical UI setup.
+  - [P4] CDN JS budget < 300KB gzipped (Leaflet ~40KB + markercluster ~10KB + Supabase ~30KB + FA icons).
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
     <title>For The Patient — Healthcare Quality Map</title>
     <meta name="description" content="Independent quality scores for 48,000+ Medicare-certified facilities. Hospitals, nursing homes, dialysis, home health, hospice, IRF, LTCH. Built from compulsory CMS data. Zero industry funding.">
+    <meta name="theme-color" content="#FDF8F0">
 
     <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link rel="preconnect" href="https://nhajnwffxlztmoadqcdl.supabase.co">
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin=""/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin=""/>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+    <!-- Plausible analytics — privacy-respecting, no cookies, no personal data [D18] -->
+    <!-- Uncomment when Plausible account is set up:
+    <script defer data-domain="forthepatient.org" src="https://plausible.io/js/script.js"></script>
+    -->
+
     <style>
+        /* ==========================================================================
+           CSS VARIABLES
+           ========================================================================== */
         :root {
             --bg: #FDF8F0;
             --card-bg: #FFFFFF;
@@ -24,14 +91,24 @@
             --border: #E1E8ED;
             --hover-bg: rgba(91, 133, 199, 0.1);
             --button-hover: rgba(91, 133, 199, 0.15);
+            --focus-ring: rgba(91, 133, 199, 0.45);
+            --skeleton-base: #E1E8ED;
+            --skeleton-shine: #F5F5F5;
 
-            /* FTP classification colors */
-            --cls-poor:      #E8A0A0;
-            --cls-below:     #F0B8A0;
-            --cls-average:   #F8D08A;
-            --cls-above:     #B8E6A0;
-            --cls-excep:     #A0D8A0;
-            --cls-unrated:   #BDC3C7;
+            --cls-poor:    #E8A0A0;
+            --cls-below:   #F0B8A0;
+            --cls-average: #F8D08A;
+            --cls-above:   #B8E6A0;
+            --cls-excep:   #A0D8A0;
+            --cls-unrated: #BDC3C7;
+
+            --header-h: 60px;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-left: env(safe-area-inset-left, 0px);
+            --safe-right: env(safe-area-inset-right, 0px);
+
+            --detail-w: 380px;
         }
 
         [data-theme="dark"] {
@@ -44,19 +121,23 @@
             --border: #34495E;
             --hover-bg: rgba(127, 179, 211, 0.1);
             --button-hover: rgba(127, 179, 211, 0.15);
+            --focus-ring: rgba(127, 179, 211, 0.45);
+            --skeleton-base: #34495E;
+            --skeleton-shine: #3D5166;
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        /* ==========================================================================
+           RESET & BASE
+           ========================================================================== */
+        *, *::before, *::after {
+            margin: 0; padding: 0; box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
         }
 
         html {
-            height: 100%;
+            height: 100%; width: 100%;
             overflow: hidden;
-            width: 100%;
+            overscroll-behavior: none; /* [M11] */
         }
 
         body {
@@ -66,12 +147,26 @@
             color: var(--text-primary);
             overflow: hidden;
             height: 100vh;
+            height: 100dvh; /* dynamic viewport for mobile */
             width: 100vw;
             line-height: 1.5;
             transition: background-color 0.3s ease, color 0.3s ease;
+            overscroll-behavior: none; /* [M11] */
         }
 
-        /* Header */
+        /* [A6] Focus-visible outlines */
+        :focus-visible {
+            outline: 3px solid var(--focus-ring);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+        :focus:not(:focus-visible) {
+            outline: none;
+        }
+
+        /* ==========================================================================
+           HEADER
+           ========================================================================== */
         .mapbox-header {
             position: fixed;
             top: 0; left: 0; right: 0;
@@ -80,24 +175,29 @@
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--border);
-            height: 60px;
+            height: calc(var(--header-h) + var(--safe-top));
+            padding-top: var(--safe-top);
             transition: all 0.3s ease;
         }
         [data-theme="dark"] .mapbox-header { background: rgba(44, 62, 80, 0.95); }
+
         .header-content {
             max-width: 1400px;
             margin: 0 auto;
             padding: 0 20px;
+            padding-left: calc(20px + var(--safe-left));
+            padding-right: calc(20px + var(--safe-right));
             display: flex;
             align-items: center;
             justify-content: space-between;
-            height: 100%;
+            height: var(--header-h);
         }
         .logo-section { display: flex; align-items: center; gap: 12px; }
         .logo-text { font-size: 1.25rem; font-weight: 600; color: var(--text-primary); letter-spacing: -0.02em; }
         .logo-subtitle { font-size: 0.75rem; color: var(--text-secondary); font-weight: 400; text-transform: uppercase; letter-spacing: 0.05em; }
-        .nav-section { display: flex; align-items: center; gap: 24px; }
-        .nav-links { display: flex; align-items: center; gap: 24px; }
+
+        .nav-section { display: flex; align-items: center; gap: 16px; }
+        .nav-links { display: flex; align-items: center; gap: 20px; }
         .nav-link {
             color: var(--text-secondary);
             text-decoration: none;
@@ -107,33 +207,87 @@
             padding: 6px 0;
             border-bottom: 2px solid transparent;
             cursor: pointer;
+            background: none;
+            border-top: none; border-left: none; border-right: none;
+            font-family: inherit;
         }
         .nav-link:hover, .nav-link.active {
             color: var(--accent);
             border-bottom-color: var(--accent);
         }
 
-        .theme-toggle { display: flex; align-items: center; gap: 8px; margin-left: 16px; }
+        /* State navigator [D11] */
+        .state-nav-wrap {
+            position: relative;
+            margin-right: 8px;
+        }
+        .state-nav-input {
+            width: 130px;
+            padding: 6px 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.8rem;
+            background: var(--card-bg);
+            color: var(--text-primary);
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+        .state-nav-input:focus {
+            border-color: var(--accent);
+        }
+        .state-nav-results {
+            position: absolute;
+            top: 100%; left: 0; right: 0;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            z-index: 1100;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+        .state-nav-results.active { display: block; }
+        .state-nav-item {
+            padding: 8px 10px;
+            cursor: pointer;
+            font-size: 0.82rem;
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border);
+        }
+        .state-nav-item:last-child { border-bottom: none; }
+        .state-nav-item:hover, .state-nav-item.kb-active { background: var(--hover-bg); }
+
+        .theme-toggle {
+            display: flex; align-items: center; gap: 8px;
+        }
         .toggle-switch {
-            position: relative; width: 50px; height: 24px;
-            background: var(--border); border-radius: 12px;
+            position: relative; width: 50px; height: 28px;
+            background: var(--border); border-radius: 14px;
             cursor: pointer; transition: background-color 0.3s ease;
+            border: none;
+            min-width: 50px; /* [M3] touch target */
+            min-height: 28px;
         }
         .toggle-switch.active { background: var(--accent); }
         .toggle-slider {
             position: absolute; top: 2px; left: 2px;
-            width: 20px; height: 20px;
+            width: 24px; height: 24px;
             background: var(--card-bg); border-radius: 50%;
             transition: transform 0.3s ease;
             display: flex; align-items: center; justify-content: center;
             font-size: 0.7rem; color: var(--text-secondary);
         }
-        .toggle-switch.active .toggle-slider { transform: translateX(26px); }
+        .toggle-switch.active .toggle-slider { transform: translateX(22px); }
 
-        /* Main */
+        /* ==========================================================================
+           MAIN CONTENT & MAP
+           ========================================================================== */
         .main-content {
-            margin-top: 60px;
-            height: calc(100vh - 60px);
+            margin-top: calc(var(--header-h) + var(--safe-top));
+            height: calc(100vh - var(--header-h) - var(--safe-top));
+            height: calc(100dvh - var(--header-h) - var(--safe-top));
             position: relative;
             overflow: hidden;
         }
@@ -141,9 +295,12 @@
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
             background: var(--bg);
+            touch-action: none; /* [M6] map gets no browser gestures */
         }
 
-        /* Floating panels */
+        /* ==========================================================================
+           FLOATING PANELS (Desktop)
+           ========================================================================== */
         .control-panel {
             position: absolute;
             background: var(--card-bg);
@@ -156,12 +313,14 @@
             transition: all 0.3s ease;
         }
 
+        /* --- Search / Filter Panel --- */
         .search-panel {
             top: 20px; left: 20px;
             width: 340px;
             padding: 20px;
-            max-height: calc(100vh - 120px);
+            max-height: calc(100vh - var(--header-h) - var(--safe-top) - 120px);
             overflow-y: auto;
+            touch-action: pan-y; /* [M6] allow vertical scroll */
         }
         .search-panel.collapsed .filter-content { display: none; }
         .search-panel.collapsed { padding: 16px 20px; }
@@ -182,34 +341,99 @@
             justify-content: center;
             gap: 8px;
             transition: all 0.2s ease;
+            font-family: inherit;
+            min-height: 44px; /* [M3] */
         }
         .collapse-toggle:hover { background: var(--button-hover); }
         .collapse-toggle i { transition: transform 0.3s ease; }
         .search-panel.collapsed .collapse-toggle i { transform: rotate(180deg); }
 
+        /* --- Detail Panel (desktop) [D5] --- */
         .info-panel {
             top: 20px; right: 20px;
-            width: 360px;
-            max-height: calc(100vh - 120px);
+            width: var(--detail-w);
+            max-height: calc(100vh - var(--header-h) - var(--safe-top) - 120px);
             overflow-y: auto;
             padding: 0;
             display: none;
         }
         .info-panel.active { display: block; }
+        .info-panel.pinned {
+            top: 0;
+            right: 0;
+            height: 100%;
+            max-height: 100%;
+            border-radius: 0;
+            border-right: none;
+            border-top: none;
+            border-bottom: none;
+        }
 
+        /* Resize handle [D5] */
+        .resize-handle {
+            position: absolute;
+            top: 0; left: -4px;
+            width: 8px; height: 100%;
+            cursor: col-resize;
+            z-index: 10;
+        }
+        .resize-handle::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 3px; height: 32px;
+            border-radius: 2px;
+            background: var(--border);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .resize-handle:hover::after,
+        .resize-handle:active::after { opacity: 1; }
+
+        /* --- Stats Panel --- */
         .stats-panel {
             bottom: 20px; left: 20px;
-            padding: 16px 20px;
+            padding: 14px 18px;
             display: flex;
             gap: 20px;
         }
+
+        /* --- Legend Panel [D9] --- */
         .legend-panel {
             bottom: 20px; right: 20px;
             padding: 14px 18px;
             font-size: 0.7rem;
         }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 3px 4px;
+            border-radius: 4px;
+            transition: background 0.15s;
+            user-select: none;
+        }
+        .legend-item:last-child { margin-bottom: 0; }
+        .legend-item:hover { background: var(--hover-bg); }
+        .legend-item.active-filter {
+            background: var(--hover-bg);
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+        .legend-color {
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
 
-        /* Form controls */
+        /* ==========================================================================
+           FORM CONTROLS
+           ========================================================================== */
         .search-group { margin-bottom: 14px; }
         .search-label {
             display: block;
@@ -231,15 +455,16 @@
             color: var(--text-primary);
             transition: all 0.2s ease;
             font-family: inherit;
+            min-height: 44px; /* [M3] */
         }
         .search-input:focus,
         .search-select:focus {
             outline: none;
             border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--hover-bg);
+            box-shadow: 0 0 0 3px var(--focus-ring);
         }
 
-        /* Multi-select for facility types — checkbox grid */
+        /* Type grid */
         .type-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -257,6 +482,7 @@
             background: var(--card-bg);
             transition: all 0.15s ease;
             user-select: none;
+            min-height: 44px; /* [M3] */
         }
         .type-chip:hover { background: var(--hover-bg); }
         .type-chip.active {
@@ -266,7 +492,7 @@
         }
         .type-chip input { display: none; }
 
-        /* Specialty filter chips */
+        /* Specialty chips [D3] */
         .chip-row {
             display: flex;
             flex-wrap: wrap;
@@ -276,7 +502,7 @@
             display: inline-flex;
             align-items: center;
             gap: 5px;
-            padding: 6px 10px;
+            padding: 8px 12px;
             border: 1px solid var(--border);
             border-radius: 16px;
             font-size: 0.75rem;
@@ -285,15 +511,50 @@
             color: var(--text-secondary);
             transition: all 0.15s ease;
             user-select: none;
+            min-height: 44px; /* [M3] */
         }
-        .filter-chip:hover { background: var(--hover-bg); color: var(--text-primary); }
+        .filter-chip:hover:not(.disabled) { background: var(--hover-bg); color: var(--text-primary); }
         .filter-chip.active {
             background: var(--accent);
             color: #fff;
             border-color: var(--accent);
         }
+        .filter-chip.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
 
-        /* Search-by-name autocomplete */
+        /* Sort toggle [D10] */
+        .sort-toggle {
+            display: flex;
+            gap: 0;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .sort-btn {
+            flex: 1;
+            padding: 7px 10px;
+            font-size: 0.72rem;
+            font-weight: 500;
+            border: none;
+            background: var(--card-bg);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.15s;
+            min-height: 36px;
+        }
+        .sort-btn.active {
+            background: var(--accent);
+            color: #fff;
+        }
+        .sort-btn:not(:last-child) {
+            border-right: 1px solid var(--border);
+        }
+
+        /* Name search autocomplete */
         .name-search-wrap { position: relative; }
         .name-results {
             position: absolute;
@@ -309,38 +570,66 @@
             z-index: 500;
         }
         .name-results.active { display: block; }
+        .name-results.above {
+            top: auto;
+            bottom: 100%;
+            border-top: 1px solid var(--border);
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+        }
         .name-result-item {
             padding: 10px 12px;
             cursor: pointer;
             border-bottom: 1px solid var(--border);
             font-size: 0.82rem;
+            min-height: 44px; /* [M3] */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
         .name-result-item:last-child { border-bottom: none; }
-        .name-result-item:hover { background: var(--hover-bg); }
+        .name-result-item:hover,
+        .name-result-item.kb-active { background: var(--hover-bg); }
         .name-result-name { font-weight: 600; color: var(--text-primary); }
         .name-result-meta { font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px; }
+        .name-result-score {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 8px;
+            font-size: 0.68rem;
+            font-weight: 600;
+            color: #2C3E50;
+        }
 
-        /* Detail panel */
+        /* ==========================================================================
+           DETAIL PANEL CONTENTS
+           ========================================================================== */
         .facility-info {
             padding: 22px;
             position: relative;
-            padding-top: 38px;
+            padding-top: 14px;
         }
-        .close-btn {
-            position: absolute;
-            top: 10px; right: 10px;
+
+        .detail-header-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .detail-action-btn {
             background: none;
             border: none;
-            font-size: 1.2rem;
+            font-size: 0.85rem;
             color: var(--text-secondary);
             cursor: pointer;
-            padding: 5px;
-            width: 32px; height: 32px;
-            display: flex; align-items: center; justify-content: center;
+            padding: 6px 8px;
             border-radius: 6px;
-            transition: all 0.2s ease;
+            transition: all 0.2s;
+            min-width: 36px; min-height: 36px;
+            display: flex; align-items: center; justify-content: center;
         }
-        .close-btn:hover { background: var(--hover-bg); color: var(--text-primary); }
+        .detail-action-btn:hover { background: var(--hover-bg); color: var(--text-primary); }
 
         .facility-header {
             border-bottom: 1px solid var(--border);
@@ -353,7 +642,6 @@
             color: var(--text-primary);
             margin-bottom: 4px;
             line-height: 1.3;
-            padding-right: 24px;
         }
         .facility-type-line {
             font-size: 0.72rem;
@@ -364,7 +652,6 @@
             margin-bottom: 12px;
         }
 
-        /* FTP score display */
         .score-block {
             display: flex;
             align-items: center;
@@ -372,14 +659,10 @@
             margin-top: 6px;
         }
         .score-circle {
-            width: 64px;
-            height: 64px;
+            width: 64px; height: 64px;
             border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.55rem;
-            font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.55rem; font-weight: 700;
             color: #2C3E50;
             flex-shrink: 0;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
@@ -396,23 +679,18 @@
         }
         .classification-badge.unrated { color: var(--text-secondary); background: var(--cls-unrated); }
         .score-out-of {
-            display: block;
-            font-size: 0.72rem;
-            color: var(--text-secondary);
-            margin-top: 4px;
+            display: block; font-size: 0.72rem;
+            color: var(--text-secondary); margin-top: 4px;
         }
         .cms-stars {
-            display: block;
-            font-size: 0.72rem;
-            color: var(--text-secondary);
-            margin-top: 2px;
+            display: block; font-size: 0.72rem;
+            color: var(--text-secondary); margin-top: 2px;
         }
         .cms-stars .star-icon { color: #f5b80b; }
 
-        /* Component list */
+        /* Components */
         .section-header {
-            font-size: 0.72rem;
-            font-weight: 700;
+            font-size: 0.72rem; font-weight: 700;
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.05em;
@@ -421,8 +699,7 @@
         .component-row {
             display: grid;
             grid-template-columns: 1fr auto auto;
-            gap: 10px;
-            align-items: center;
+            gap: 10px; align-items: center;
             padding: 8px 0;
             border-bottom: 1px solid var(--border);
             font-size: 0.82rem;
@@ -431,10 +708,8 @@
         .component-name { color: var(--text-primary); }
         .component-weight { color: var(--text-secondary); font-size: 0.72rem; }
         .component-score {
-            font-weight: 600;
-            min-width: 36px;
-            text-align: right;
-            font-variant-numeric: tabular-nums;
+            font-weight: 600; min-width: 36px;
+            text-align: right; font-variant-numeric: tabular-nums;
         }
         .component-bar {
             grid-column: 1 / -1;
@@ -445,9 +720,7 @@
             margin-top: 4px;
         }
         .component-bar-fill {
-            height: 100%;
-            background: var(--accent);
-            border-radius: 2px;
+            height: 100%; border-radius: 2px;
             transition: width 0.3s ease;
         }
         .component-na {
@@ -456,12 +729,9 @@
             font-size: 0.75rem;
         }
 
-        /* Specialty badges in detail panel */
+        /* Specialty badges */
         .specialty-badges {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
-            margin-top: 8px;
+            display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px;
         }
         .spec-badge {
             font-size: 0.68rem;
@@ -481,17 +751,10 @@
             border-radius: 8px;
             font-size: 0.78rem;
         }
-        .enforcement-title {
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 4px;
-        }
-        .enforcement-amt {
-            font-size: 0.7rem;
-            color: var(--text-secondary);
-        }
+        .enforcement-title { font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+        .enforcement-amt { font-size: 0.7rem; color: var(--text-secondary); }
 
-        /* Address block */
+        /* Address */
         .addr-block {
             margin-top: 16px;
             font-size: 0.8rem;
@@ -501,69 +764,93 @@
         .addr-block i { width: 16px; color: var(--accent); margin-right: 4px; }
 
         .directions-btn {
-            display: block;
+            display: block; text-align: center;
+            margin-top: 16px; padding: 11px;
+            background: var(--accent); color: white;
+            text-decoration: none; border-radius: 8px;
+            font-size: 0.875rem; font-weight: 500;
+            min-height: 44px; /* [M3] */
+            line-height: 22px;
+        }
+
+        /* ==========================================================================
+           LOADING SKELETON [D8]
+           ========================================================================== */
+        @keyframes shimmer {
+            0% { background-position: -400px 0; }
+            100% { background-position: 400px 0; }
+        }
+        .skeleton-block {
+            background: linear-gradient(90deg, var(--skeleton-base) 25%, var(--skeleton-shine) 50%, var(--skeleton-base) 75%);
+            background-size: 800px 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 6px;
+        }
+        .skeleton-circle {
+            width: 64px; height: 64px; border-radius: 50%;
+        }
+        .skeleton-line {
+            height: 12px; margin-bottom: 8px;
+        }
+        .skeleton-line.w70 { width: 70%; }
+        .skeleton-line.w50 { width: 50%; }
+        .skeleton-line.w90 { width: 90%; }
+        .skeleton-line.w40 { width: 40%; }
+        .skeleton-bar {
+            height: 4px; width: 100%; margin-top: 6px;
+        }
+
+        /* ==========================================================================
+           EMPTY STATE [D6] & ERROR STATE [D7]
+           ========================================================================== */
+        .empty-state, .error-state {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 40px 20px;
             text-align: center;
-            margin-top: 16px;
-            padding: 11px;
+            color: var(--text-secondary);
+        }
+        .empty-state i, .error-state i { font-size: 2rem; margin-bottom: 12px; color: var(--border); }
+        .empty-state h4, .error-state h4 { font-size: 1rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
+        .empty-state p, .error-state p { font-size: 0.875rem; margin-bottom: 12px; }
+
+        .clear-filters-btn, .retry-btn {
+            padding: 10px 20px;
             background: var(--accent);
-            color: white;
-            text-decoration: none;
+            color: #fff;
+            border: none;
             border-radius: 8px;
-            font-size: 0.875rem;
+            font-size: 0.82rem;
             font-weight: 500;
+            cursor: pointer;
+            font-family: inherit;
+            min-height: 44px;
+            transition: opacity 0.2s;
+        }
+        .clear-filters-btn:hover, .retry-btn:hover { opacity: 0.85; }
+
+        .error-link {
+            display: block;
+            margin-top: 8px;
+            font-size: 0.75rem;
+            color: var(--accent);
         }
 
         /* Stats */
         .stat-item { text-align: center; min-width: 60px; }
         .stat-value { font-size: 1.25rem; font-weight: 700; color: var(--text-primary); line-height: 1; }
         .stat-label {
-            font-size: 0.7rem;
-            color: var(--text-secondary);
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-top: 2px;
+            font-size: 0.7rem; color: var(--text-secondary); font-weight: 500;
+            text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px;
         }
-
-        /* Legend */
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 6px;
-            font-size: 0.72rem;
-            color: var(--text-secondary);
-        }
-        .legend-item:last-child { margin-bottom: 0; }
-        .legend-color {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-
-        .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 40px 20px;
-            text-align: center;
-            color: var(--text-secondary);
-        }
-        .empty-state i { font-size: 2rem; margin-bottom: 12px; color: var(--border); }
-        .empty-state h4 { font-size: 1rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
-        .empty-state p { font-size: 0.875rem; }
 
         /* Loading bar */
         .query-loading {
             position: absolute;
             top: 0; left: 0; right: 0;
-            height: 2px;
-            background: var(--accent);
+            height: 2px; background: var(--accent);
             z-index: 600;
-            opacity: 0;
-            transition: opacity 0.2s;
+            opacity: 0; transition: opacity 0.2s;
         }
         .query-loading.active {
             opacity: 1;
@@ -575,15 +862,34 @@
             100% { transform: translateX(100%)  scaleX(0.3); }
         }
 
-        /* About / static page content */
+        /* Offline toast [M12] */
+        .offline-toast {
+            position: fixed;
+            top: calc(var(--header-h) + var(--safe-top) + 10px);
+            left: 50%; transform: translateX(-50%);
+            background: #E74C3C;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            z-index: 2000;
+            display: none;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        }
+        .offline-toast.active { display: block; }
+
+        /* ==========================================================================
+           ABOUT PAGE
+           ========================================================================== */
         .page-content {
             display: none;
-            margin-top: 60px;
+            margin-top: calc(var(--header-h) + var(--safe-top));
             padding: 40px 20px;
             max-width: 800px;
-            margin-left: auto;
-            margin-right: auto;
-            height: calc(100vh - 60px);
+            margin-left: auto; margin-right: auto;
+            height: calc(100vh - var(--header-h) - var(--safe-top));
+            height: calc(100dvh - var(--header-h) - var(--safe-top));
             overflow-y: auto;
             scrollbar-width: none;
             -ms-overflow-style: none;
@@ -602,12 +908,11 @@
         .about-section h3 { font-size: 1.25rem; font-weight: 600; color: var(--accent); margin-bottom: 12px; }
         .about-section p { color: var(--text-secondary); line-height: 1.6; margin-bottom: 12px; }
 
-        /* Footer (legal links) */
+        /* Footer */
         .footer-bar {
             position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
+            bottom: calc(20px + var(--safe-bottom));
+            left: 50%; transform: translateX(-50%);
             background: rgba(255, 255, 255, 0.92);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
@@ -615,8 +920,7 @@
             border-radius: 20px;
             padding: 8px 18px;
             font-size: 0.7rem;
-            display: flex;
-            gap: 14px;
+            display: flex; gap: 14px;
             z-index: 350;
             box-shadow: 0 2px 12px rgba(0,0,0,0.06);
         }
@@ -633,9 +937,7 @@
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
             background: var(--bg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: flex; align-items: center; justify-content: center;
             z-index: 9999;
             transition: opacity 0.3s ease;
         }
@@ -649,30 +951,62 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Responsive */
+        /* ==========================================================================
+           BOTTOM SHEET (Mobile) [M1]
+           ========================================================================== */
+        .bottom-sheet {
+            display: none;
+            position: fixed;
+            left: 0; right: 0; bottom: 0;
+            z-index: 800;
+            background: var(--card-bg);
+            border-radius: 16px 16px 0 0;
+            box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+            transition: transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+            max-height: 90vh;
+            max-height: 90dvh;
+            padding-bottom: var(--safe-bottom);
+            touch-action: none;
+        }
+        .sheet-handle {
+            display: flex; justify-content: center;
+            padding: 10px 0 6px;
+            cursor: grab;
+        }
+        .sheet-handle::after {
+            content: '';
+            width: 40px; height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+        }
+        .sheet-body {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+            max-height: calc(90vh - 40px);
+            max-height: calc(90dvh - 40px);
+            padding: 0 20px 20px;
+        }
+
+        /* ==========================================================================
+           MOBILE OVERRIDES [M*]
+           ========================================================================== */
         @media (max-width: 768px) {
-            .main-content { height: calc(100vh - 60px); padding-bottom: 70px; }
-            #map { bottom: 70px; }
-            .search-panel {
-                left: 10px; right: 10px;
-                width: calc(100% - 20px);
-                max-height: 50vh;
-            }
-            .search-panel.collapsed { width: auto; right: auto; min-width: 140px; }
-            .info-panel {
-                left: 10px; right: 10px;
-                width: calc(100% - 20px);
-                top: auto;
-                bottom: 80px;
-                max-height: 50vh;
-            }
+            .search-panel { display: none; }
+            .info-panel { display: none !important; }
+            .legend-panel { display: none; }
+            .footer-bar { display: none; } /* [M9] legal links in About drawer */
+
+            .bottom-sheet { display: block; }
+
             .stats-panel {
                 position: fixed !important;
-                left: 0 !important; right: 0 !important; bottom: 0 !important;
+                left: 0 !important; right: 0 !important;
+                bottom: var(--safe-bottom) !important;
                 width: 100% !important;
-                padding: 12px 15px !important;
+                padding: 10px 15px !important;
                 gap: 10px !important;
-                z-index: 500 !important;
+                z-index: 700 !important;
                 display: flex !important;
                 margin: 0 !important;
                 border-radius: 0 !important;
@@ -681,23 +1015,71 @@
                 border-bottom: none !important;
             }
             .stat-item { flex: 1; min-width: 0; }
-            .legend-panel { display: none; }
-            .footer-bar { display: none; }
-            .nav-links { gap: 16px; }
+            .stat-value { font-size: 1.1rem; }
+
+            .nav-links { gap: 14px; }
             .logo-text { font-size: 1.1rem; }
             .logo-subtitle { display: none; }
+            .state-nav-wrap { display: none; }
+
+            #map { bottom: 0; }
+            .main-content {
+                height: calc(100vh - var(--header-h) - var(--safe-top));
+                height: calc(100dvh - var(--header-h) - var(--safe-top));
+                padding-bottom: 0;
+            }
         }
 
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--bg); }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+        /* Landscape mobile [M10] */
+        @media (max-width: 768px) and (orientation: landscape) {
+            :root { --header-h: 40px; }
+            .logo-subtitle { display: none; }
+            .stats-panel { padding: 6px 10px !important; }
+            .stat-value { font-size: 0.95rem; }
+        }
 
+        /* ==========================================================================
+           PRINT STYLESHEET [D16]
+           ========================================================================== */
+        @media print {
+            body { background: #fff; color: #000; overflow: visible; height: auto; }
+            .mapbox-header, #map, .search-panel, .stats-panel, .legend-panel,
+            .footer-bar, .loading-overlay, .query-loading, .bottom-sheet,
+            .offline-toast, .detail-action-btn, .resize-handle, .directions-btn { display: none !important; }
+            .main-content { margin-top: 0; height: auto; overflow: visible; position: static; }
+            .info-panel {
+                display: block !important;
+                position: static !important;
+                width: 100% !important;
+                max-height: none !important;
+                overflow: visible !important;
+                border: none !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                background: #fff !important;
+            }
+            .facility-info { padding: 20px 0; }
+            .component-bar-fill { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            .score-circle, .classification-badge, .spec-badge, .enforcement-block {
+                print-color-adjust: exact; -webkit-print-color-adjust: exact;
+            }
+            .print-methodology-url {
+                display: block !important;
+                margin-top: 24px;
+                font-size: 0.8rem;
+                color: #555;
+            }
+        }
+        .print-methodology-url { display: none; }
+
+        /* ==========================================================================
+           LEAFLET OVERRIDES
+           ========================================================================== */
         .leaflet-popup-content-wrapper {
             background: var(--card-bg);
             color: var(--text-primary);
             border-radius: 8px;
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.1);
         }
         .leaflet-popup-content { margin: 14px; font-size: 0.82rem; line-height: 1.4; }
         .leaflet-popup-tip { background: var(--card-bg); }
@@ -707,62 +1089,138 @@
             border: 1px solid var(--border) !important;
         }
         .leaflet-control-zoom a:hover { background: var(--hover-bg) !important; }
+
+        /* MarkerCluster override: use classification colors */
+        .marker-cluster {
+            background: none !important;
+        }
+        .marker-cluster div {
+            width: 36px; height: 36px;
+            margin-left: 2px; margin-top: 2px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.72rem; font-weight: 700;
+            color: #2C3E50;
+            background: var(--cls-average);
+            box-shadow: 0 1px 6px rgba(0,0,0,0.15);
+        }
+        .marker-cluster-small div { background: var(--cls-above); }
+        .marker-cluster-medium div { background: var(--cls-average); }
+        .marker-cluster-large div { background: var(--cls-below); }
+
+        /* Cluster pie-chart SVG overlay */
+        .cluster-pie {
+            position: absolute;
+            top: 0; left: 0;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+
+        /* Tooltip for disabled chips [D3] */
+        [data-tooltip] {
+            position: relative;
+        }
+        [data-tooltip]:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: calc(100% + 6px);
+            left: 50%; transform: translateX(-50%);
+            background: var(--text-primary);
+            color: var(--card-bg);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.68rem;
+            white-space: nowrap;
+            z-index: 1000;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
-    <div class="loading-overlay" id="loading">
-        <div class="spinner"></div>
+    <div class="loading-overlay" id="loading"><div class="spinner"></div></div>
+    <div class="offline-toast" id="offline-toast" role="alert" aria-live="assertive">
+        <i class="fas fa-wifi" style="margin-right:6px;opacity:0.7"></i> You're offline. Results may be outdated.
     </div>
 
-    <div class="mapbox-header">
+    <!-- ========== HEADER ========== -->
+    <header class="mapbox-header" role="banner">
         <div class="header-content">
             <div class="logo-section">
                 <div class="logo-text">For The Patient</div>
                 <div class="logo-subtitle">Healthcare Quality</div>
             </div>
-            <div class="nav-section">
+            <nav class="nav-section" role="navigation" aria-label="Main navigation">
+                <div class="state-nav-wrap" role="search" aria-label="State navigator">
+                    <input type="text"
+                           class="state-nav-input"
+                           id="state-nav"
+                           placeholder="Go to state…"
+                           autocomplete="off"
+                           aria-label="Navigate to a US state"
+                           role="combobox"
+                           aria-expanded="false"
+                           aria-controls="state-nav-results"
+                           aria-autocomplete="list">
+                    <div class="state-nav-results" id="state-nav-results" role="listbox"></div>
+                </div>
                 <div class="nav-links">
-                    <a class="nav-link active" onclick="showMap()">Map</a>
-                    <a class="nav-link" onclick="showAbout()">About</a>
-                    <a class="nav-link" href="/methodology">Methodology</a>
+                    <button class="nav-link active" onclick="showMap()" aria-label="Show map view">Map</button>
+                    <button class="nav-link" onclick="showAbout()" aria-label="Show about page">About</button>
+                    <a class="nav-link" href="/methodology" aria-label="View methodology">Methodology</a>
                 </div>
                 <div class="theme-toggle">
-                    <i class="fas fa-sun"></i>
-                    <div class="toggle-switch" onclick="toggleTheme()">
-                        <div class="toggle-slider"><i class="fas fa-sun"></i></div>
-                    </div>
-                    <i class="fas fa-moon"></i>
+                    <i class="fas fa-sun" aria-hidden="true"></i>
+                    <button class="toggle-switch"
+                            id="theme-toggle-btn"
+                            onclick="toggleTheme()"
+                            role="switch"
+                            aria-checked="false"
+                            aria-label="Toggle dark mode">
+                        <div class="toggle-slider"><i class="fas fa-sun" aria-hidden="true"></i></div>
+                    </button>
+                    <i class="fas fa-moon" aria-hidden="true"></i>
                 </div>
-            </div>
+            </nav>
         </div>
-    </div>
+    </header>
 
-    <div class="main-content" id="map-page">
-        <div id="map"></div>
-        <div class="query-loading" id="query-loading"></div>
+    <!-- ========== MAP PAGE ========== -->
+    <main class="main-content" id="map-page" role="main">
+        <div id="map" role="application" aria-label="Healthcare facility map"></div>
+        <div class="query-loading" id="query-loading" role="progressbar" aria-label="Loading facilities"></div>
 
-        <!-- Search Panel -->
-        <div class="control-panel search-panel" id="search-panel">
+        <!-- Search Panel (desktop only) -->
+        <div class="control-panel search-panel" id="search-panel" role="search" aria-label="Facility filters">
             <div class="filter-content">
-
                 <div class="search-group">
-                    <label class="search-label">Search Facility Name</label>
+                    <label class="search-label" for="name-search" id="name-search-label">Search Facility Name</label>
                     <div class="name-search-wrap">
-                        <input type="text" class="search-input" id="name-search" placeholder="e.g. Emory University Hospital" autocomplete="off">
-                        <div class="name-results" id="name-results"></div>
+                        <input type="text"
+                               class="search-input"
+                               id="name-search"
+                               placeholder="e.g. Emory University Hospital"
+                               autocomplete="off"
+                               role="combobox"
+                               aria-expanded="false"
+                               aria-controls="name-results"
+                               aria-autocomplete="list"
+                               aria-labelledby="name-search-label">
+                        <div class="name-results" id="name-results" role="listbox" aria-label="Search results"></div>
                     </div>
                 </div>
 
                 <div class="search-group">
-                    <label class="search-label">Facility Type</label>
-                    <div class="type-grid" id="type-grid">
-                        <!-- Filled by JS -->
-                    </div>
+                    <label class="search-label" id="type-label">Facility Type</label>
+                    <div class="type-grid" id="type-grid" role="group" aria-labelledby="type-label"></div>
                 </div>
 
                 <div class="search-group">
-                    <label class="search-label">Minimum FTP Score</label>
-                    <select class="search-select" id="min-score">
+                    <label class="search-label" for="min-score">Minimum FTP Score</label>
+                    <select class="search-select" id="min-score" aria-label="Minimum quality score filter">
                         <option value="0">Any score</option>
                         <option value="4">4.0+</option>
                         <option value="5">5.0+</option>
@@ -772,37 +1230,42 @@
                 </div>
 
                 <div class="search-group">
-                    <label class="search-label">Hospital Capabilities</label>
-                    <div class="chip-row" id="specialty-chips">
-                        <div class="filter-chip" data-key="teaching"><i class="fas fa-graduation-cap"></i> Teaching</div>
-                        <div class="filter-chip" data-key="nicu"><i class="fas fa-baby"></i> NICU</div>
-                        <div class="filter-chip" data-key="cath"><i class="fas fa-heart-pulse"></i> Cardiac Cath</div>
-                        <div class="filter-chip" data-key="trauma"><i class="fas fa-truck-medical"></i> Trauma</div>
-                        <div class="filter-chip" data-key="er"><i class="fas fa-hospital"></i> ER</div>
+                    <label class="search-label" id="specialty-label">Hospital Capabilities</label>
+                    <div class="chip-row" id="specialty-chips" role="group" aria-labelledby="specialty-label">
+                        <button class="filter-chip" data-key="teaching" role="switch" aria-checked="false" aria-label="Filter: Teaching hospital"><i class="fas fa-graduation-cap" aria-hidden="true"></i> Teaching</button>
+                        <button class="filter-chip" data-key="nicu" role="switch" aria-checked="false" aria-label="Filter: NICU"><i class="fas fa-baby" aria-hidden="true"></i> NICU</button>
+                        <button class="filter-chip" data-key="cath" role="switch" aria-checked="false" aria-label="Filter: Cardiac catheterization"><i class="fas fa-heart-pulse" aria-hidden="true"></i> Cardiac Cath</button>
+                        <button class="filter-chip" data-key="trauma" role="switch" aria-checked="false" aria-label="Filter: Trauma center"><i class="fas fa-truck-medical" aria-hidden="true"></i> Trauma</button>
+                        <button class="filter-chip" data-key="er" role="switch" aria-checked="false" aria-label="Filter: Emergency room"><i class="fas fa-hospital" aria-hidden="true"></i> ER</button>
                     </div>
                 </div>
 
+                <div class="sort-toggle" role="radiogroup" aria-label="Sort results by">
+                    <button class="sort-btn active" data-sort="distance" role="radio" aria-checked="true">Distance</button>
+                    <button class="sort-btn" data-sort="score" role="radio" aria-checked="false">Score</button>
+                </div>
             </div>
 
-            <button class="collapse-toggle" onclick="toggleSearchPanel()">
+            <button class="collapse-toggle" onclick="toggleSearchPanel()" aria-expanded="true" aria-controls="search-panel">
                 <span id="collapse-text">Hide Filters</span>
-                <i class="fas fa-chevron-up"></i>
+                <i class="fas fa-chevron-up" aria-hidden="true"></i>
             </button>
         </div>
 
-        <!-- Info Panel -->
-        <div class="control-panel info-panel" id="info-panel">
+        <!-- Detail Panel (desktop) [D5] -->
+        <aside class="control-panel info-panel" id="info-panel" role="dialog" aria-modal="false" aria-label="Facility details">
+            <div class="resize-handle" id="resize-handle" aria-hidden="true"></div>
             <div id="facility-info-content">
                 <div class="empty-state">
-                    <i class="fas fa-map-marker-alt"></i>
+                    <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
                     <h4>Select a Facility</h4>
                     <p>Click any point on the map to view detailed quality scores</p>
                 </div>
             </div>
-        </div>
+        </aside>
 
         <!-- Stats Panel -->
-        <div class="control-panel stats-panel">
+        <div class="control-panel stats-panel" aria-live="polite" aria-atomic="true" aria-label="Facility statistics">
             <div class="stat-item">
                 <div class="stat-value" id="total-count">0</div>
                 <div class="stat-label">In view</div>
@@ -817,27 +1280,86 @@
             </div>
         </div>
 
-        <!-- Legend Panel -->
-        <div class="control-panel legend-panel">
-            <div class="legend-item"><div class="legend-color" style="background: var(--cls-excep)"></div><span>Exceptional</span></div>
-            <div class="legend-item"><div class="legend-color" style="background: var(--cls-above)"></div><span>Above Average</span></div>
-            <div class="legend-item"><div class="legend-color" style="background: var(--cls-average)"></div><span>Average</span></div>
-            <div class="legend-item"><div class="legend-color" style="background: var(--cls-below)"></div><span>Below Average</span></div>
-            <div class="legend-item"><div class="legend-color" style="background: var(--cls-poor)"></div><span>Poor</span></div>
-            <div class="legend-item"><div class="legend-color" style="background: var(--cls-unrated)"></div><span>Unrated</span></div>
+        <!-- Legend Panel (desktop) [D9] -->
+        <div class="control-panel legend-panel" id="legend-panel" aria-label="Score classification legend">
+            <div class="legend-item" data-class="Exceptional" role="button" tabindex="0" aria-label="Filter: Exceptional"><div class="legend-color" style="background:var(--cls-excep)"></div><span>Exceptional</span></div>
+            <div class="legend-item" data-class="Above Average" role="button" tabindex="0" aria-label="Filter: Above Average"><div class="legend-color" style="background:var(--cls-above)"></div><span>Above Average</span></div>
+            <div class="legend-item" data-class="Average" role="button" tabindex="0" aria-label="Filter: Average"><div class="legend-color" style="background:var(--cls-average)"></div><span>Average</span></div>
+            <div class="legend-item" data-class="Below Average" role="button" tabindex="0" aria-label="Filter: Below Average"><div class="legend-color" style="background:var(--cls-below)"></div><span>Below Average</span></div>
+            <div class="legend-item" data-class="Poor" role="button" tabindex="0" aria-label="Filter: Poor"><div class="legend-color" style="background:var(--cls-poor)"></div><span>Poor</span></div>
+            <div class="legend-item" data-class="Unrated" role="button" tabindex="0" aria-label="Filter: Unrated"><div class="legend-color" style="background:var(--cls-unrated)"></div><span>Unrated</span></div>
         </div>
 
-        <!-- Footer (legal) -->
-        <div class="footer-bar">
-            <a href="/methodology">Methodology</a>
-            <a href="/medical-disclaimer">Medical Disclaimer</a>
-            <a href="/dispute-process">Dispute</a>
-            <a href="/privacy">Privacy</a>
-            <a href="/terms">Terms</a>
+        <!-- Footer (legal) — desktop only [M9] -->
+        <div class="footer-bar" aria-label="Legal links">
+            <a href="/methodology" rel="noopener noreferrer">Methodology</a>
+            <a href="/medical-disclaimer" rel="noopener noreferrer">Medical Disclaimer</a>
+            <a href="/dispute-process" rel="noopener noreferrer">Dispute</a>
+            <a href="/privacy" rel="noopener noreferrer">Privacy</a>
+            <a href="/terms" rel="noopener noreferrer">Terms</a>
+        </div>
+    </main>
+
+    <!-- ========== BOTTOM SHEET (mobile filters) [M1] ========== -->
+    <div class="bottom-sheet" id="filter-sheet" aria-label="Filters" role="dialog">
+        <div class="sheet-handle" id="filter-sheet-handle" aria-hidden="true"></div>
+        <div class="sheet-body" id="filter-sheet-body">
+            <div class="search-group">
+                <label class="search-label" for="mobile-name-search">Search Facility Name</label>
+                <div class="name-search-wrap">
+                    <input type="text"
+                           class="search-input"
+                           id="mobile-name-search"
+                           placeholder="e.g. Emory University Hospital"
+                           autocomplete="off"
+                           role="combobox"
+                           aria-expanded="false"
+                           aria-label="Search facility by name">
+                    <div class="name-results" id="mobile-name-results" role="listbox"></div>
+                </div>
+            </div>
+            <div class="search-group">
+                <label class="search-label">Facility Type</label>
+                <div class="type-grid" id="mobile-type-grid" role="group" aria-label="Facility types"></div>
+            </div>
+            <div class="search-group">
+                <label class="search-label" for="mobile-min-score">Minimum FTP Score</label>
+                <select class="search-select" id="mobile-min-score" aria-label="Minimum quality score">
+                    <option value="0">Any score</option>
+                    <option value="4">4.0+</option>
+                    <option value="5">5.0+</option>
+                    <option value="6">6.0+ (Above Average)</option>
+                    <option value="7.5">7.5+ (Exceptional)</option>
+                </select>
+            </div>
+            <div class="search-group">
+                <label class="search-label">Hospital Capabilities</label>
+                <div class="chip-row" id="mobile-specialty-chips" role="group" aria-label="Hospital specialty filters">
+                    <button class="filter-chip" data-key="teaching" role="switch" aria-checked="false"><i class="fas fa-graduation-cap" aria-hidden="true"></i> Teaching</button>
+                    <button class="filter-chip" data-key="nicu" role="switch" aria-checked="false"><i class="fas fa-baby" aria-hidden="true"></i> NICU</button>
+                    <button class="filter-chip" data-key="cath" role="switch" aria-checked="false"><i class="fas fa-heart-pulse" aria-hidden="true"></i> Cardiac Cath</button>
+                    <button class="filter-chip" data-key="trauma" role="switch" aria-checked="false"><i class="fas fa-truck-medical" aria-hidden="true"></i> Trauma</button>
+                    <button class="filter-chip" data-key="er" role="switch" aria-checked="false"><i class="fas fa-hospital" aria-hidden="true"></i> ER</button>
+                </div>
+            </div>
+            <!-- Legal links on mobile [M9] -->
+            <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border); font-size:0.72rem; display:flex; flex-wrap:wrap; gap:10px;">
+                <a href="/methodology" style="color:var(--text-secondary)">Methodology</a>
+                <a href="/medical-disclaimer" style="color:var(--text-secondary)">Disclaimer</a>
+                <a href="/dispute-process" style="color:var(--text-secondary)">Dispute</a>
+                <a href="/privacy" style="color:var(--text-secondary)">Privacy</a>
+                <a href="/terms" style="color:var(--text-secondary)">Terms</a>
+            </div>
         </div>
     </div>
 
-    <!-- About Page -->
+    <!-- ========== BOTTOM SHEET (mobile detail) [M1] ========== -->
+    <div class="bottom-sheet" id="detail-sheet" aria-label="Facility details" role="dialog">
+        <div class="sheet-handle" id="detail-sheet-handle" aria-hidden="true"></div>
+        <div class="sheet-body" id="detail-sheet-body"></div>
+    </div>
+
+    <!-- ========== ABOUT PAGE ========== -->
     <div class="page-content" id="about-page">
         <div class="about-content">
             <h1 class="about-title">About For The Patient</h1>
@@ -869,583 +1391,1421 @@
         </div>
     </div>
 
+    <!-- ========== SCRIPTS ========== -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        // ===========================================================
-        //  Supabase config
-        // ===========================================================
-        const SUPABASE_URL = 'https://nhajnwffxlztmoadqcdl.supabase.co';
-        // !!! REPLACE WITH YOUR PUBLIC ANON KEY (safe to ship — RLS gates writes) !!!
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5oYWpud2ZmeGx6dG1vYWRxY2RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTA1NzAsImV4cCI6MjA4ODMyNjU3MH0.lUVbH_ka0LS8B6xuQJG8KuOdwgk7lTejl9dPfzSUHwQ';
+    // ===========================================================================
+    //  SUPABASE CONFIG
+    // ===========================================================================
+    const SUPABASE_URL = 'https://nhajnwffxlztmoadqcdl.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5oYWpud2ZmeGx6dG1vYWRxY2RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTA1NzAsImV4cCI6MjA4ODMyNjU3MH0.lUVbH_ka0LS8B6xuQJG8KuOdwgk7lTejl9dPfzSUHwQ';
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // ===========================================================================
+    //  CONSTANTS
+    // ===========================================================================
+    const FACILITY_TYPES = [
+        { value: 'hospital',     label: 'Hospitals' },
+        { value: 'nursing_home', label: 'Nursing Homes' },
+        { value: 'dialysis',     label: 'Dialysis' },
+        { value: 'home_health',  label: 'Home Health' },
+        { value: 'hospice',      label: 'Hospice' },
+        { value: 'irf',          label: 'IRF' },
+        { value: 'ltch',         label: 'LTCH' },
+    ];
+    const TYPE_LABEL = Object.fromEntries(FACILITY_TYPES.map(t => [t.value, t.label]));
 
-        // ===========================================================
-        //  Constants
-        // ===========================================================
-        const FACILITY_TYPES = [
-            { value: 'hospital',     label: 'Hospitals' },
-            { value: 'nursing_home', label: 'Nursing Homes' },
-            { value: 'dialysis',     label: 'Dialysis' },
-            { value: 'home_health',  label: 'Home Health' },
-            { value: 'hospice',      label: 'Hospice' },
-            { value: 'irf',          label: 'IRF' },
-            { value: 'ltch',         label: 'LTCH' },
-        ];
+    const CLASS_COLORS = {
+        'Exceptional':    '#A0D8A0',
+        'Above Average':  '#B8E6A0',
+        'Average':        '#F8D08A',
+        'Below Average':  '#F0B8A0',
+        'Poor':           '#E8A0A0',
+        'Unrated':        '#BDC3C7',
+    };
+    const CLASS_ORDER = ['Exceptional', 'Above Average', 'Average', 'Below Average', 'Poor', 'Unrated'];
 
-        const TYPE_LABEL = Object.fromEntries(FACILITY_TYPES.map(t => [t.value, t.label]));
+    // US states with centroids for state navigator [D11]
+    const US_STATES = [
+        {n:'Alabama',s:'AL',lat:32.806671,lng:-86.791130},
+        {n:'Alaska',s:'AK',lat:61.370716,lng:-152.404419},
+        {n:'Arizona',s:'AZ',lat:33.729759,lng:-111.431221},
+        {n:'Arkansas',s:'AR',lat:34.969704,lng:-92.373123},
+        {n:'California',s:'CA',lat:36.116203,lng:-119.681564},
+        {n:'Colorado',s:'CO',lat:39.059811,lng:-105.311104},
+        {n:'Connecticut',s:'CT',lat:41.597782,lng:-72.755371},
+        {n:'Delaware',s:'DE',lat:39.318523,lng:-75.507141},
+        {n:'Florida',s:'FL',lat:27.766279,lng:-81.686783},
+        {n:'Georgia',s:'GA',lat:33.040619,lng:-83.643074},
+        {n:'Hawaii',s:'HI',lat:21.094318,lng:-157.498337},
+        {n:'Idaho',s:'ID',lat:44.240459,lng:-114.478773},
+        {n:'Illinois',s:'IL',lat:40.349457,lng:-88.986137},
+        {n:'Indiana',s:'IN',lat:39.849426,lng:-86.258278},
+        {n:'Iowa',s:'IA',lat:42.011539,lng:-93.210526},
+        {n:'Kansas',s:'KS',lat:38.526600,lng:-96.726486},
+        {n:'Kentucky',s:'KY',lat:37.668140,lng:-84.670067},
+        {n:'Louisiana',s:'LA',lat:31.169546,lng:-91.867805},
+        {n:'Maine',s:'ME',lat:44.693947,lng:-69.381927},
+        {n:'Maryland',s:'MD',lat:39.063946,lng:-76.802101},
+        {n:'Massachusetts',s:'MA',lat:42.230171,lng:-71.530106},
+        {n:'Michigan',s:'MI',lat:43.326618,lng:-84.536095},
+        {n:'Minnesota',s:'MN',lat:45.694454,lng:-93.900192},
+        {n:'Mississippi',s:'MS',lat:32.741646,lng:-89.678696},
+        {n:'Missouri',s:'MO',lat:38.456085,lng:-92.288368},
+        {n:'Montana',s:'MT',lat:46.921925,lng:-110.454353},
+        {n:'Nebraska',s:'NE',lat:41.125370,lng:-98.268082},
+        {n:'Nevada',s:'NV',lat:38.313515,lng:-117.055374},
+        {n:'New Hampshire',s:'NH',lat:43.452492,lng:-71.563896},
+        {n:'New Jersey',s:'NJ',lat:40.298904,lng:-74.521011},
+        {n:'New Mexico',s:'NM',lat:34.840515,lng:-106.248482},
+        {n:'New York',s:'NY',lat:42.165726,lng:-74.948051},
+        {n:'North Carolina',s:'NC',lat:35.630066,lng:-79.806419},
+        {n:'North Dakota',s:'ND',lat:47.528912,lng:-99.784012},
+        {n:'Ohio',s:'OH',lat:40.388783,lng:-82.764915},
+        {n:'Oklahoma',s:'OK',lat:35.565342,lng:-96.928917},
+        {n:'Oregon',s:'OR',lat:44.572021,lng:-122.070938},
+        {n:'Pennsylvania',s:'PA',lat:40.590752,lng:-77.209755},
+        {n:'Rhode Island',s:'RI',lat:41.680893,lng:-71.511780},
+        {n:'South Carolina',s:'SC',lat:33.856892,lng:-80.945007},
+        {n:'South Dakota',s:'SD',lat:44.299782,lng:-99.438828},
+        {n:'Tennessee',s:'TN',lat:35.747845,lng:-86.692345},
+        {n:'Texas',s:'TX',lat:31.054487,lng:-97.563461},
+        {n:'Utah',s:'UT',lat:40.150032,lng:-111.862434},
+        {n:'Vermont',s:'VT',lat:44.045876,lng:-72.710686},
+        {n:'Virginia',s:'VA',lat:37.769337,lng:-78.169968},
+        {n:'Washington',s:'WA',lat:47.400902,lng:-121.490494},
+        {n:'West Virginia',s:'WV',lat:38.491226,lng:-80.954456},
+        {n:'Wisconsin',s:'WI',lat:44.268543,lng:-89.616508},
+        {n:'Wyoming',s:'WY',lat:42.755966,lng:-107.302490},
+        {n:'District of Columbia',s:'DC',lat:38.897438,lng:-77.026817},
+        {n:'Puerto Rico',s:'PR',lat:18.220833,lng:-66.590149},
+        {n:'Guam',s:'GU',lat:13.444304,lng:144.793731},
+        {n:'U.S. Virgin Islands',s:'VI',lat:18.335765,lng:-64.896335},
+    ];
 
-        // Classification → color
-        const CLASS_COLORS = {
-            'Exceptional':    '#A0D8A0',
-            'Above Average':  '#B8E6A0',
-            'Average':        '#F8D08A',
-            'Below Average':  '#F0B8A0',
-            'Poor':           '#E8A0A0',
-            'Unrated':        '#BDC3C7',
-        };
+    // ===========================================================================
+    //  STATE
+    // ===========================================================================
+    let map, clusterLayer;
+    let currentTheme = 'light';
+    let currentFacilities = [];
+    let activeTypes = new Set(FACILITY_TYPES.map(t => t.value));
+    let activeSpecialties = { teaching: false, nicu: false, cath: false, trauma: false, er: false };
+    let activeLegendFilters = new Set(); // [D9] empty = show all
+    let sortBy = 'distance'; // [D10]
+    let openFacilityId = null;
+    let isMobile = false;
+    let isOnline = navigator.onLine;
+    let isTouching = false; // [M5]
+    let pendingFetch = false;
+    let detailPanelPinned = false;
+    let inflightController = null;
 
-        function classColor(cls) {
-            return CLASS_COLORS[cls] || CLASS_COLORS.Unrated;
+    // ===========================================================================
+    //  UTILITY
+    // ===========================================================================
+    function classColor(cls) { return CLASS_COLORS[cls] || CLASS_COLORS.Unrated; }
+    function classBadgeClass(cls) { return (!cls || cls === 'Unrated') ? 'unrated' : ''; }
+    function debounce(fn, ms) {
+        let t;
+        return function(...a) { clearTimeout(t); t = setTimeout(() => fn.apply(this, a), ms); };
+    }
+    function truthy(v) {
+        if (v === true) return true;
+        if (v === false || v == null) return false;
+        const s = String(v).toLowerCase();
+        return s === 'y' || s === 'yes' || s === 'true' || s === '1';
+    }
+    function escapeHtml(s) {
+        if (s == null) return '';
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+    function scoreToBarColor(score) {
+        if (score == null) return 'var(--border)';
+        if (score >= 7.5) return CLASS_COLORS['Exceptional'];
+        if (score >= 6.0) return CLASS_COLORS['Above Average'];
+        if (score >= 4.5) return CLASS_COLORS['Average'];
+        if (score >= 3.0) return CLASS_COLORS['Below Average'];
+        return CLASS_COLORS['Poor'];
+    }
+    function haptic(ms) {
+        if (isMobile && navigator.vibrate) {
+            try { navigator.vibrate(ms || 10); } catch(e) {}
         }
+    }
+    function checkMobile() {
+        isMobile = window.innerWidth <= 768;
+    }
 
-        function classBadgeClass(cls) {
-            if (!cls || cls === 'Unrated') return 'unrated';
-            return '';
-        }
+    // ===========================================================================
+    //  VIEWPORT RADIUS [D2]
+    // ===========================================================================
+    function getViewportRadiusMiles() {
+        if (!map) return 25;
+        const bounds = map.getBounds();
+        const ne = bounds.getNorthEast();
+        const sw = bounds.getSouthWest();
+        // Diagonal distance in meters, convert to miles
+        const diagMeters = map.distance(ne, sw);
+        const halfDiagMiles = (diagMeters / 1609.344) / 2;
+        return Math.max(2, Math.min(2000, Math.ceil(halfDiagMiles)));
+    }
 
-        // ===========================================================
-        //  State
-        // ===========================================================
-        let map;
-        let markersLayer;
-        let currentTheme = 'light';
-        let currentFacilities = [];
-        let activeTypes = new Set(FACILITY_TYPES.map(t => t.value));
-        let activeSpecialties = {
-            teaching: false,
-            nicu:     false,
-            cath:     false,
-            trauma:   false,
-            er:       false,
+    // ===========================================================================
+    //  URL STATE [D4]
+    // ===========================================================================
+    function getUrlState() {
+        const p = new URLSearchParams(window.location.search);
+        return {
+            lat: parseFloat(p.get('lat')) || null,
+            lng: parseFloat(p.get('lng')) || null,
+            z: parseInt(p.get('z')) || null,
+            types: p.get('types') ? p.get('types').split(',') : null,
+            minScore: parseFloat(p.get('ms')) || 0,
+            specialties: p.get('sp') ? p.get('sp').split(',') : [],
+            facilityId: p.get('fid') || null,
+            theme: p.get('theme') || null,
+            sort: p.get('sort') || null,
         };
-        let inflightController = null;
+    }
 
-        // ===========================================================
-        //  Init
-        // ===========================================================
-        function initMap() {
-            map = L.map('map', {
-                center: [33.749, -84.388], // Atlanta default
-                zoom:   10,
-                zoomControl: false,
-                preferCanvas: true,
-            });
+    function pushUrlState(replace) {
+        if (!map) return;
+        const c = map.getCenter();
+        const p = new URLSearchParams();
+        p.set('lat', c.lat.toFixed(4));
+        p.set('lng', c.lng.toFixed(4));
+        p.set('z', Math.round(map.getZoom()));
 
-            const tileUrl = currentTheme === 'dark'
-                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+        const types = Array.from(activeTypes);
+        if (types.length < FACILITY_TYPES.length) p.set('types', types.join(','));
 
-            L.tileLayer(tileUrl, {
-                attribution: '© CARTO · CMS public data',
-                subdomains: 'abcd',
-                maxZoom: 20,
-            }).addTo(map);
+        const ms = parseFloat((isMobile ? document.getElementById('mobile-min-score') : document.getElementById('min-score'))?.value) || 0;
+        if (ms > 0) p.set('ms', ms);
 
-            markersLayer = L.layerGroup().addTo(map);
+        const sp = Object.entries(activeSpecialties).filter(([,v]) => v).map(([k]) => k);
+        if (sp.length > 0) p.set('sp', sp.join(','));
 
+        if (openFacilityId) p.set('fid', openFacilityId);
+        if (currentTheme === 'dark') p.set('theme', 'dark');
+        if (sortBy !== 'distance') p.set('sort', sortBy);
+
+        const url = '?' + p.toString();
+        if (replace) {
+            history.replaceState(null, '', url);
+        } else {
+            history.pushState(null, '', url);
+        }
+    }
+
+    // ===========================================================================
+    //  INIT MAP
+    // ===========================================================================
+    function initMap() {
+        const urlState = getUrlState();
+        const defaultCenter = [33.749, -84.388]; // Atlanta
+        const defaultZoom = 10;
+
+        const center = (urlState.lat && urlState.lng) ? [urlState.lat, urlState.lng] : defaultCenter;
+        const zoom = urlState.z || defaultZoom;
+
+        map = L.map('map', {
+            center: center,
+            zoom: zoom,
+            zoomControl: false,
+            preferCanvas: true,
+        });
+
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        const tileUrl = currentTheme === 'dark'
+            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+            : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+
+        L.tileLayer(tileUrl, {
+            attribution: '&copy; CARTO &middot; CMS public data',
+            subdomains: 'abcd',
+            maxZoom: 20,
+        }).addTo(map);
+
+        // Marker cluster layer [D1]
+        clusterLayer = L.markerClusterGroup({
+            maxClusterRadius: 50,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            chunkedLoading: true,
+            iconCreateFunction: createClusterIcon,
+            disableClusteringAtZoom: 16,
+        });
+        map.addLayer(clusterLayer);
+
+        // Touch tracking [M5]
+        map.getContainer().addEventListener('touchstart', () => { isTouching = true; }, { passive: true });
+        map.getContainer().addEventListener('touchend', () => {
+            isTouching = false;
+            if (pendingFetch) { pendingFetch = false; fetchInView(); }
+        }, { passive: true });
+
+        // Map move → debounced query
+        const debouncedFetch = debounce(() => {
+            if (isTouching) { pendingFetch = true; return; } // [M5]
+            fetchInView();
+            pushUrlState(true);
+        }, 300);
+        map.on('moveend', debouncedFetch);
+        map.on('zoomend', debouncedFetch);
+
+        // Build UI (non-critical deferred) [M13]
+        const idleSetup = () => {
             buildTypeChips();
             wireSpecialtyChips();
             wireMinScore();
             wireNameSearch();
+            wireSortToggle();
+            wireStateNav();
+            wireLegend();
+            wireResizeHandle();
+        };
 
-            // Map move/zoom → debounced query
-            const debouncedFetch = debounce(fetchInView, 300);
-            map.on('moveend', debouncedFetch);
-            map.on('zoomend', debouncedFetch);
-
-            // Try geolocation, then fetch
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    pos => {
-                        map.setView([pos.coords.latitude, pos.coords.longitude], 11);
-                        // moveend will trigger fetch
-                    },
-                    () => fetchInView(),
-                    { timeout: 4000 }
-                );
-            } else {
-                fetchInView();
-            }
-
-            // initial fetch in case geolocation never fires
-            setTimeout(() => {
-                if (currentFacilities.length === 0) fetchInView();
-            }, 1500);
-
-            document.getElementById('loading').classList.add('hidden');
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(idleSetup, { timeout: 200 });
+        } else {
+            setTimeout(idleSetup, 0);
         }
 
-        // ===========================================================
-        //  UI builders
-        // ===========================================================
-        function buildTypeChips() {
-            const grid = document.getElementById('type-grid');
+        // Restore URL state filters
+        if (urlState.types) {
+            activeTypes = new Set(urlState.types.filter(t => TYPE_LABEL[t]));
+        }
+        if (urlState.specialties.length) {
+            urlState.specialties.forEach(k => { if (k in activeSpecialties) activeSpecialties[k] = true; });
+        }
+        if (urlState.sort === 'score') sortBy = 'score';
+
+        // Geolocation (only if URL didn't provide location)
+        if (!urlState.lat && navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                pos => { map.setView([pos.coords.latitude, pos.coords.longitude], 11); },
+                () => fetchInView(),
+                { timeout: 4000 }
+            );
+        } else {
+            fetchInView();
+        }
+
+        // Fallback fetch
+        setTimeout(() => { if (currentFacilities.length === 0) fetchInView(); }, 1500);
+
+        // Restore facility detail from URL
+        if (urlState.facilityId) {
+            setTimeout(() => openFacilityDetail(urlState.facilityId), 500);
+        }
+
+        // popstate → back button [D4]
+        window.addEventListener('popstate', () => {
+            const s = getUrlState();
+            if (!s.facilityId && openFacilityId) {
+                closeFacilityInfo();
+            } else if (s.facilityId && s.facilityId !== openFacilityId) {
+                openFacilityDetail(s.facilityId);
+            }
+        });
+
+        document.getElementById('loading').classList.add('hidden');
+    }
+
+    // ===========================================================================
+    //  CLUSTER ICON [D1]
+    // ===========================================================================
+    function createClusterIcon(cluster) {
+        const children = cluster.getAllChildMarkers();
+        const count = children.length;
+        const size = count < 20 ? 40 : count < 100 ? 48 : 56;
+
+        // Count classifications for pie chart
+        const counts = {};
+        children.forEach(m => {
+            const cls = m.options._classification || 'Unrated';
+            counts[cls] = (counts[cls] || 0) + 1;
+        });
+
+        // Build SVG pie
+        const r = size / 2;
+        let segments = '';
+        let startAngle = 0;
+        CLASS_ORDER.forEach(cls => {
+            if (!counts[cls]) return;
+            const pct = counts[cls] / count;
+            const endAngle = startAngle + pct * 360;
+            const large = pct > 0.5 ? 1 : 0;
+            const sr = startAngle * Math.PI / 180;
+            const er = endAngle * Math.PI / 180;
+            const x1 = r + r * Math.sin(sr);
+            const y1 = r - r * Math.cos(sr);
+            const x2 = r + r * Math.sin(er);
+            const y2 = r - r * Math.cos(er);
+            if (pct >= 0.999) {
+                segments += `<circle cx="${r}" cy="${r}" r="${r}" fill="${CLASS_COLORS[cls]}"/>`;
+            } else {
+                segments += `<path d="M${r},${r} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} Z" fill="${CLASS_COLORS[cls]}"/>`;
+            }
+            startAngle = endAngle;
+        });
+
+        const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+            ${segments}
+            <circle cx="${r}" cy="${r}" r="${r * 0.6}" fill="var(--card-bg, #fff)"/>
+            <text x="${r}" y="${r}" text-anchor="middle" dominant-baseline="central"
+                  font-size="${size < 48 ? 11 : 13}" font-weight="700" fill="var(--text-primary, #2C3E50)">${count}</text>
+        </svg>`;
+
+        return L.divIcon({
+            html: svg,
+            className: 'cluster-pie',
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2],
+        });
+    }
+
+    // ===========================================================================
+    //  UI BUILDERS
+    // ===========================================================================
+    function buildTypeChips() {
+        const grids = [document.getElementById('type-grid'), document.getElementById('mobile-type-grid')];
+        grids.forEach(grid => {
+            if (!grid) return;
             grid.innerHTML = '';
             FACILITY_TYPES.forEach(t => {
                 const chip = document.createElement('label');
-                chip.className = 'type-chip active';
+                chip.className = activeTypes.has(t.value) ? 'type-chip active' : 'type-chip';
                 chip.dataset.value = t.value;
-                chip.innerHTML = `<input type="checkbox" checked> ${t.label}`;
+                chip.setAttribute('role', 'checkbox');
+                chip.setAttribute('aria-checked', activeTypes.has(t.value));
+                chip.setAttribute('tabindex', '0');
+                chip.setAttribute('aria-label', t.label);
+                chip.innerHTML = `<input type="checkbox" ${activeTypes.has(t.value) ? 'checked' : ''} tabindex="-1"> ${escapeHtml(t.label)}`;
                 chip.addEventListener('click', e => {
                     e.preventDefault();
                     if (activeTypes.has(t.value)) {
                         activeTypes.delete(t.value);
-                        chip.classList.remove('active');
                     } else {
                         activeTypes.add(t.value);
-                        chip.classList.add('active');
                     }
+                    haptic(10);
+                    syncTypeChips();
+                    updateSpecialtyChipState();
                     fetchInView();
+                });
+                chip.addEventListener('keydown', e => {
+                    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); chip.click(); }
                 });
                 grid.appendChild(chip);
             });
-        }
+        });
+    }
 
-        function wireSpecialtyChips() {
-            document.querySelectorAll('#specialty-chips .filter-chip').forEach(el => {
-                el.addEventListener('click', () => {
-                    const key = el.dataset.key;
-                    activeSpecialties[key] = !activeSpecialties[key];
-                    el.classList.toggle('active', activeSpecialties[key]);
-                    fetchInView();
+    function syncTypeChips() {
+        document.querySelectorAll('.type-chip').forEach(chip => {
+            const v = chip.dataset.value;
+            const on = activeTypes.has(v);
+            chip.classList.toggle('active', on);
+            chip.setAttribute('aria-checked', on);
+            const cb = chip.querySelector('input');
+            if (cb) cb.checked = on;
+        });
+    }
+
+    // [D3] Disable specialty chips when no hospital type is selected
+    function updateSpecialtyChipState() {
+        const hasHospital = activeTypes.has('hospital');
+        document.querySelectorAll('.filter-chip').forEach(el => {
+            if (!hasHospital) {
+                el.classList.add('disabled');
+                el.setAttribute('data-tooltip', 'Applies to hospitals only');
+                el.setAttribute('aria-disabled', 'true');
+            } else {
+                el.classList.remove('disabled');
+                el.removeAttribute('data-tooltip');
+                el.removeAttribute('aria-disabled');
+            }
+        });
+    }
+
+    function wireSpecialtyChips() {
+        document.querySelectorAll('.filter-chip').forEach(el => {
+            el.addEventListener('click', () => {
+                if (el.classList.contains('disabled')) return;
+                const key = el.dataset.key;
+                activeSpecialties[key] = !activeSpecialties[key];
+                haptic(10);
+                // Sync both desktop and mobile
+                document.querySelectorAll(`.filter-chip[data-key="${key}"]`).forEach(c => {
+                    c.classList.toggle('active', activeSpecialties[key]);
+                    c.setAttribute('aria-checked', activeSpecialties[key]);
                 });
+                fetchInView();
             });
-        }
+        });
+        updateSpecialtyChipState();
+    }
 
-        function wireMinScore() {
-            document.getElementById('min-score').addEventListener('change', fetchInView);
-        }
-
-        function wireNameSearch() {
-            const input = document.getElementById('name-search');
-            const results = document.getElementById('name-results');
-
-            const search = debounce(async () => {
-                const q = input.value.trim();
-                if (q.length < 2) {
-                    results.classList.remove('active');
-                    results.innerHTML = '';
-                    return;
-                }
-                try {
-                    const { data, error } = await sb.rpc('search_facilities_by_name', {
-                        p_query: q,
-                        p_limit: 12,
-                    });
-                    if (error) throw error;
-                    renderNameResults(data || []);
-                } catch (err) {
-                    console.error('name search failed', err);
-                }
-            }, 250);
-
-            input.addEventListener('input', search);
-            input.addEventListener('focus', () => {
-                if (results.children.length > 0) results.classList.add('active');
+    function wireMinScore() {
+        ['min-score', 'mobile-min-score'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', () => {
+                // Sync both selects
+                const v = el.value;
+                document.getElementById('min-score').value = v;
+                document.getElementById('mobile-min-score').value = v;
+                fetchInView();
             });
-            document.addEventListener('click', e => {
-                if (!e.target.closest('.name-search-wrap')) {
-                    results.classList.remove('active');
-                }
-            });
-        }
+        });
+    }
 
-        function renderNameResults(rows) {
-            const results = document.getElementById('name-results');
-            if (rows.length === 0) {
-                results.innerHTML = '<div class="name-result-item"><div class="name-result-meta">No matches</div></div>';
-                results.classList.add('active');
+    // [D10] Sort toggle
+    function wireSortToggle() {
+        document.querySelectorAll('.sort-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                sortBy = btn.dataset.sort;
+                document.querySelectorAll('.sort-btn').forEach(b => {
+                    b.classList.toggle('active', b.dataset.sort === sortBy);
+                    b.setAttribute('aria-checked', b.dataset.sort === sortBy);
+                });
+                renderMarkers(currentFacilities);
+            });
+        });
+    }
+
+    // [D9] Clickable legend
+    function wireLegend() {
+        document.querySelectorAll('.legend-item[data-class]').forEach(el => {
+            el.addEventListener('click', e => {
+                const cls = el.dataset.class;
+                if (e.shiftKey) {
+                    // Multi-select with shift
+                    if (activeLegendFilters.has(cls)) {
+                        activeLegendFilters.delete(cls);
+                    } else {
+                        activeLegendFilters.add(cls);
+                    }
+                } else {
+                    // Single select toggle
+                    if (activeLegendFilters.size === 1 && activeLegendFilters.has(cls)) {
+                        activeLegendFilters.clear();
+                    } else {
+                        activeLegendFilters.clear();
+                        activeLegendFilters.add(cls);
+                    }
+                }
+                // Update visual
+                document.querySelectorAll('.legend-item[data-class]').forEach(li => {
+                    li.classList.toggle('active-filter', activeLegendFilters.has(li.dataset.class));
+                });
+                renderMarkers(currentFacilities);
+            });
+            el.addEventListener('keydown', e => {
+                if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); el.click(); }
+            });
+        });
+    }
+
+    // [D5] Resize handle for detail panel
+    function wireResizeHandle() {
+        const handle = document.getElementById('resize-handle');
+        const panel = document.getElementById('info-panel');
+        if (!handle || !panel) return;
+
+        let startX, startW;
+        function onMouseDown(e) {
+            e.preventDefault();
+            startX = e.clientX;
+            startW = panel.offsetWidth;
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        }
+        function onMouseMove(e) {
+            const dx = startX - e.clientX;
+            const newW = Math.max(320, Math.min(600, startW + dx));
+            panel.style.width = newW + 'px';
+        }
+        function onMouseUp() {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        }
+        handle.addEventListener('mousedown', onMouseDown);
+    }
+
+    // ===========================================================================
+    //  NAME SEARCH [D12]
+    // ===========================================================================
+    function wireNameSearch() {
+        wireNameSearchInstance('name-search', 'name-results');
+        wireNameSearchInstance('mobile-name-search', 'mobile-name-results');
+    }
+
+    function wireNameSearchInstance(inputId, resultsId) {
+        const input = document.getElementById(inputId);
+        const results = document.getElementById(resultsId);
+        if (!input || !results) return;
+
+        let kbIndex = -1;
+
+        const search = debounce(async () => {
+            const q = input.value.trim();
+            if (q.length < 2) {
+                results.classList.remove('active');
+                results.innerHTML = '';
+                input.setAttribute('aria-expanded', 'false');
                 return;
             }
-            results.innerHTML = rows.map(r => `
-                <div class="name-result-item" data-id="${escapeAttr(r.facility_id)}"
-                     data-lat="${r.latitude}" data-lng="${r.longitude}">
+            if (!isOnline) return;
+            try {
+                const { data, error } = await sb.rpc('search_facilities_by_name', {
+                    p_query: q, p_limit: 12,
+                });
+                if (error) throw error;
+                renderNameResults(data || [], results);
+                input.setAttribute('aria-expanded', 'true');
+                kbIndex = -1;
+                // Analytics: hashed search query
+                trackEvent('search', { query_hash: hashStr(q) });
+            } catch (err) {
+                console.error('name search failed', err);
+            }
+        }, 250);
+
+        input.addEventListener('input', search);
+        input.addEventListener('focus', () => {
+            if (results.children.length > 0) {
+                results.classList.add('active');
+                input.setAttribute('aria-expanded', 'true');
+            }
+        });
+
+        // [D12] Keyboard navigation
+        input.addEventListener('keydown', e => {
+            const items = results.querySelectorAll('.name-result-item');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                kbIndex = Math.min(kbIndex + 1, items.length - 1);
+                updateKbActive(items, kbIndex);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                kbIndex = Math.max(kbIndex - 1, -1);
+                updateKbActive(items, kbIndex);
+            } else if (e.key === 'Enter' && kbIndex >= 0 && items[kbIndex]) {
+                e.preventDefault();
+                items[kbIndex].click();
+            } else if (e.key === 'Escape') {
+                results.classList.remove('active');
+                input.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        document.addEventListener('click', e => {
+            if (!e.target.closest('.name-search-wrap')) {
+                results.classList.remove('active');
+                input.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
+    function updateKbActive(items, idx) {
+        items.forEach((el, i) => {
+            el.classList.toggle('kb-active', i === idx);
+            if (i === idx) el.scrollIntoView({ block: 'nearest' });
+        });
+    }
+
+    function renderNameResults(rows, resultsEl) {
+        if (rows.length === 0) {
+            resultsEl.innerHTML = '<div class="name-result-item"><div class="name-result-meta">No matches</div></div>';
+            resultsEl.classList.add('active');
+            return;
+        }
+        resultsEl.innerHTML = rows.map((r, i) => {
+            const scoreColor = classColor(r.score_classification);
+            const scoreText = r.final_score != null ? r.final_score.toFixed(1) : '—';
+            return `
+                <div class="name-result-item" data-id="${escapeHtml(r.facility_id)}"
+                     data-lat="${r.latitude}" data-lng="${r.longitude}"
+                     role="option" id="sr-${i}" aria-label="${escapeHtml(r.facility_name)}, score ${scoreText}">
                     <div class="name-result-name">${escapeHtml(r.facility_name || '')}</div>
                     <div class="name-result-meta">
                         ${escapeHtml(TYPE_LABEL[r.facility_type] || r.facility_type || '')}
                         · ${escapeHtml(r.city || '')}, ${escapeHtml(r.state || '')}
-                        · Score ${r.final_score != null ? r.final_score.toFixed(1) : '—'}
+                        · <span class="name-result-score" style="background:${scoreColor}">${scoreText}</span>
                     </div>
-                </div>
-            `).join('');
-            results.classList.add('active');
-
-            results.querySelectorAll('.name-result-item').forEach(el => {
-                el.addEventListener('click', () => {
-                    const lat = parseFloat(el.dataset.lat);
-                    const lng = parseFloat(el.dataset.lng);
-                    const id = el.dataset.id;
-                    if (!isNaN(lat) && !isNaN(lng)) {
-                        map.setView([lat, lng], 14);
-                    }
-                    results.classList.remove('active');
-                    document.getElementById('name-search').value = '';
-                    openFacilityDetail(id);
-                });
-            });
-        }
-
-        // ===========================================================
-        //  Viewport query
-        // ===========================================================
-        function radiusMilesForZoom(zoom) {
-            // Rough: half-diagonal of viewport at this zoom level
-            // Tuned to the nearby_facilities RPC's expected range (5–200mi)
-            const table = {
-                3: 1500, 4: 1000, 5: 600, 6: 400, 7: 250,
-                8: 150, 9: 80, 10: 45, 11: 25, 12: 15,
-                13: 8, 14: 5, 15: 3, 16: 2, 17: 1.5, 18: 1
-            };
-            const z = Math.round(zoom);
-            return table[z] || (z < 3 ? 2000 : 1);
-        }
-
-        async function fetchInView() {
-            if (!map) return;
-            const center = map.getCenter();
-            const zoom   = map.getZoom();
-            const radius = radiusMilesForZoom(zoom);
-
-            const types = Array.from(activeTypes);
-            if (types.length === 0) {
-                markersLayer.clearLayers();
-                currentFacilities = [];
-                updateStats([]);
-                return;
-            }
-
-            const minScore = parseFloat(document.getElementById('min-score').value) || 0;
-
-            const params = {
-                p_lat: center.lat,
-                p_lng: center.lng,
-                p_radius_miles: radius,
-                p_types: types,
-                p_min_score: minScore || null,
-                p_require_nicu:     activeSpecialties.nicu     || null,
-                p_require_cath:     activeSpecialties.cath     || null,
-                p_require_trauma:   activeSpecialties.trauma   || null,
-                p_require_teaching: activeSpecialties.teaching || null,
-                p_require_er:       activeSpecialties.er       || null,
-                p_limit: 500,
-            };
-
-            showLoading(true);
-            try {
-                if (inflightController) inflightController.abort();
-                inflightController = new AbortController();
-
-                const { data, error } = await sb.rpc('nearby_facilities', params);
-                if (error) throw error;
-
-                currentFacilities = data || [];
-                renderMarkers(currentFacilities);
-                updateStats(currentFacilities);
-            } catch (err) {
-                console.error('nearby_facilities failed', err);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        function renderMarkers(facilities) {
-            markersLayer.clearLayers();
-            facilities.forEach(f => {
-                if (f.latitude == null || f.longitude == null) return;
-                const color = classColor(f.score_classification);
-                const marker = L.circleMarker([f.latitude, f.longitude], {
-                    radius: 6,
-                    fillColor: color,
-                    color: '#fff',
-                    weight: 1.2,
-                    opacity: 1,
-                    fillOpacity: 0.88,
-                });
-                marker.bindPopup(buildPopup(f));
-                marker.on('click', () => openFacilityDetail(f.facility_id));
-                markersLayer.addLayer(marker);
-            });
-        }
-
-        function buildPopup(f) {
-            const score = f.final_score != null ? f.final_score.toFixed(1) : '—';
-            return `
-                <div>
-                    <strong>${escapeHtml(f.facility_name || '')}</strong><br>
-                    <span style="color: var(--text-secondary); font-size: 11px;">
-                        ${escapeHtml(TYPE_LABEL[f.facility_type] || '')}
-                    </span><br>
-                    <span style="display:inline-block; padding:2px 8px; margin-top:4px;
-                                 border-radius:10px; font-size:11px; font-weight:600;
-                                 background:${classColor(f.score_classification)}; color:#2C3E50;">
-                        ${score} · ${escapeHtml(f.score_classification || 'Unrated')}
-                    </span>
                 </div>
             `;
-        }
+        }).join('');
+        resultsEl.classList.add('active');
 
-        function updateStats(rows) {
-            const scored = rows.filter(r => r.final_score != null);
-            const total = rows.length;
-            const avg = scored.length > 0
-                ? (scored.reduce((s, r) => s + r.final_score, 0) / scored.length).toFixed(1)
-                : '—';
-            const high = scored.filter(r =>
-                r.score_classification === 'Above Average' ||
-                r.score_classification === 'Exceptional'
-            ).length;
-
-            document.getElementById('total-count').textContent = total.toLocaleString();
-            document.getElementById('avg-score').textContent  = avg;
-            document.getElementById('high-quality').textContent = high.toLocaleString();
-        }
-
-        // ===========================================================
-        //  Detail panel
-        // ===========================================================
-        async function openFacilityDetail(facilityId) {
-            const panel  = document.getElementById('info-panel');
-            const target = document.getElementById('facility-info-content');
-            target.innerHTML = `<div class="empty-state"><div class="spinner" style="margin-bottom:12px"></div><p>Loading facility…</p></div>`;
-            panel.classList.add('active');
-
-            try {
-                const { data, error } = await sb.rpc('facility_detail', { p_facility_id: facilityId });
-                if (error) throw error;
-                if (!data) throw new Error('No data');
-
-                renderFacilityDetail(data);
-            } catch (err) {
-                console.error('facility_detail failed', err);
-                target.innerHTML = `<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><h4>Couldn't load facility</h4><p>${escapeHtml(err.message || '')}</p></div>`;
-            }
-        }
-
-        function renderFacilityDetail(payload) {
-            // RPC returns JSONB { facility, components, enforcement }
-            const f          = payload.facility    || payload; // tolerate either shape
-            const components = payload.components  || [];
-            const enforcement= payload.enforcement || [];
-
-            const score    = f.final_score != null ? f.final_score.toFixed(1) : '—';
-            const cls      = f.score_classification || 'Unrated';
-            const cmsStars = f.cms_overall_rating || f.overall_rating || null;
-
-            const componentHtml = components.length === 0
-                ? `<div class="component-na">No component data available</div>`
-                : components
-                    .sort((a, b) => (a.component_order || 0) - (b.component_order || 0))
-                    .map(c => {
-                        const compScore = c.component_score != null ? c.component_score.toFixed(1) : '—';
-                        const wt = c.component_weight != null ? Math.round(c.component_weight * 100) + '%' : '';
-                        const fillPct = c.component_score != null
-                            ? Math.max(0, Math.min(100, (c.component_score / 10) * 100))
-                            : 0;
-                        return `
-                            <div>
-                                <div class="component-row">
-                                    <div class="component-name">${escapeHtml(c.component_name || '')}</div>
-                                    <div class="component-weight">${wt}</div>
-                                    <div class="component-score">${compScore}</div>
-                                </div>
-                                <div class="component-bar"><div class="component-bar-fill" style="width:${fillPct}%; background:${scoreToBarColor(c.component_score)}"></div></div>
-                            </div>
-                        `;
-                    }).join('');
-
-            // Specialty badges from POS fields
-            const badges = [];
-            if (truthy(f.teaching_status))    badges.push('Teaching');
-            if (truthy(f.has_cardiac_cath_lab))badges.push('Cardiac Cath');
-            if (truthy(f.has_cardiac_surgery))badges.push('Cardiac Surgery');
-            if (truthy(f.nicu_level))         badges.push('NICU');
-            if (truthy(f.has_trauma_center))  badges.push('Trauma Center');
-            if (truthy(f.has_burn_unit))      badges.push('Burn Unit');
-            if (truthy(f.has_organ_transplant))badges.push('Transplant');
-            if (truthy(f.has_mri))            badges.push('MRI');
-            if (f.case_mix_index != null)     badges.push(`CMI ${Number(f.case_mix_index).toFixed(2)}`);
-
-            const badgesHtml = badges.length > 0
-                ? `<div class="specialty-badges">${badges.map(b => `<span class="spec-badge">${escapeHtml(b)}</span>`).join('')}</div>`
-                : '';
-
-            const enforcementHtml = enforcement.length > 0
-                ? `<div class="enforcement-block">
-                       <div class="enforcement-title"><i class="fas fa-gavel"></i> ${enforcement.length} regulatory action${enforcement.length === 1 ? '' : 's'}</div>
-                       ${enforcement.slice(0, 5).map(e => `
-                           <div class="enforcement-amt">
-                               ${escapeHtml(e.penalty_type || 'Penalty')}
-                               ${e.amount ? '· $' + Number(e.amount).toLocaleString() : ''}
-                               ${e.penalty_date ? '· ' + escapeHtml(String(e.penalty_date).slice(0,10)) : ''}
-                           </div>
-                       `).join('')}
-                       ${enforcement.length > 5 ? `<div class="enforcement-amt">+ ${enforcement.length - 5} more</div>` : ''}
-                   </div>`
-                : '';
-
-            const cmsLine = cmsStars
-                ? `<span class="cms-stars">CMS overall rating: ${'<i class="fas fa-star star-icon"></i>'.repeat(Math.round(cmsStars))} ${cmsStars}/5</span>`
-                : '';
-
-            const target = document.getElementById('facility-info-content');
-            target.innerHTML = `
-                <div class="facility-info">
-                    <button class="close-btn" onclick="closeFacilityInfo()" aria-label="Close">
-                        <i class="fas fa-times"></i>
-                    </button>
-
-                    <div class="facility-header">
-                        <h3 class="facility-name">${escapeHtml(f.facility_name || '')}</h3>
-                        <div class="facility-type-line">${escapeHtml(TYPE_LABEL[f.facility_type] || f.facility_type || '')}</div>
-
-                        <div class="score-block">
-                            <div class="score-circle ${cls === 'Unrated' ? 'unrated' : ''}" style="background:${classColor(cls)}">${score}</div>
-                            <div class="score-meta">
-                                <span class="classification-badge ${classBadgeClass(cls)}" style="background:${classColor(cls)}">${escapeHtml(cls)}</span>
-                                <span class="score-out-of">FTP score · 10-point scale</span>
-                                ${cmsLine}
-                            </div>
-                        </div>
-
-                        ${badgesHtml}
-                    </div>
-
-                    <div class="section-header">Component breakdown</div>
-                    ${componentHtml}
-
-                    ${enforcementHtml}
-
-                    <div class="addr-block">
-                        ${f.address || f.address_line_1 ? `<div><i class="fas fa-map-marker-alt"></i>${escapeHtml(f.address || f.address_line_1 || '')}</div>` : ''}
-                        <div style="padding-left:20px">${escapeHtml(f.city || '')}${f.city ? ', ' : ''}${escapeHtml(f.state || '')} ${escapeHtml(f.zip_code || '')}</div>
-                        ${f.phone ? `<div><i class="fas fa-phone"></i>${escapeHtml(f.phone)}</div>` : ''}
-                    </div>
-
-                    <a href="https://maps.google.com/?q=${f.latitude},${f.longitude}" target="_blank" rel="noopener" class="directions-btn">
-                        Get Directions
-                    </a>
-                </div>
-            `;
-        }
-
-        function closeFacilityInfo() {
-            document.getElementById('info-panel').classList.remove('active');
-        }
-
-        function scoreToBarColor(score) {
-            if (score == null) return 'var(--border)';
-            if (score >= 7.5) return CLASS_COLORS['Exceptional'];
-            if (score >= 6.0) return CLASS_COLORS['Above Average'];
-            if (score >= 4.5) return CLASS_COLORS['Average'];
-            if (score >= 3.0) return CLASS_COLORS['Below Average'];
-            return CLASS_COLORS['Poor'];
-        }
-
-        // ===========================================================
-        //  UI helpers
-        // ===========================================================
-        function showLoading(active) {
-            const el = document.getElementById('query-loading');
-            if (active) el.classList.add('active');
-            else el.classList.remove('active');
-        }
-
-        function toggleSearchPanel() {
-            const panel = document.getElementById('search-panel');
-            const text  = document.getElementById('collapse-text');
-            panel.classList.toggle('collapsed');
-            text.textContent = panel.classList.contains('collapsed') ? 'Show Filters' : 'Hide Filters';
-        }
-
-        function showMap() {
-            document.getElementById('map-page').style.display = 'block';
-            document.getElementById('about-page').classList.remove('active');
-            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-            document.querySelectorAll('.nav-link')[0].classList.add('active');
-            setTimeout(() => map && map.invalidateSize(), 100);
-        }
-
-        function showAbout() {
-            document.getElementById('map-page').style.display = 'none';
-            document.getElementById('about-page').classList.add('active');
-            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-            document.querySelectorAll('.nav-link')[1].classList.add('active');
-        }
-
-        function toggleTheme() {
-            currentTheme = currentTheme === 'light' ? 'dark' : 'light';
-            document.documentElement.setAttribute('data-theme', currentTheme);
-            try { localStorage.setItem('theme', currentTheme); } catch (e) {}
-
-            document.querySelector('.toggle-switch').classList.toggle('active');
-            document.querySelector('.toggle-slider i').className =
-                currentTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
-
-            map.eachLayer(layer => {
-                if (layer instanceof L.TileLayer) map.removeLayer(layer);
-            });
-            const tileUrl = currentTheme === 'dark'
-                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-            L.tileLayer(tileUrl, { attribution: '© CARTO · CMS public data', subdomains: 'abcd', maxZoom: 20 }).addTo(map);
-        }
-
-        function debounce(func, wait) {
-            let t;
-            return function(...args) {
-                clearTimeout(t);
-                t = setTimeout(() => func.apply(this, args), wait);
-            };
-        }
-
-        function truthy(v) {
-            if (v === true)  return true;
-            if (v === false) return false;
-            if (v == null)   return false;
-            const s = String(v).toLowerCase();
-            return s === 'y' || s === 'yes' || s === 'true' || s === '1';
-        }
-
-        function escapeHtml(s) {
-            if (s == null) return '';
-            return String(s)
-                .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-                .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-        }
-        function escapeAttr(s) { return escapeHtml(s); }
-
-        // ===========================================================
-        //  Boot
-        // ===========================================================
-        window.addEventListener('load', () => {
-            try {
-                const savedTheme = localStorage.getItem('theme') || 'light';
-                currentTheme = savedTheme;
-                document.documentElement.setAttribute('data-theme', savedTheme);
-                if (savedTheme === 'dark') {
-                    document.querySelector('.toggle-switch').classList.add('active');
-                    document.querySelector('.toggle-slider i').className = 'fas fa-moon';
-                }
-            } catch (e) {}
-
-            initMap();
-
-            document.addEventListener('keydown', e => {
-                if (e.key === 'Escape') closeFacilityInfo();
+        resultsEl.querySelectorAll('.name-result-item[data-id]').forEach(el => {
+            el.addEventListener('click', () => {
+                const lat = parseFloat(el.dataset.lat);
+                const lng = parseFloat(el.dataset.lng);
+                const id = el.dataset.id;
+                if (!isNaN(lat) && !isNaN(lng)) map.setView([lat, lng], 14);
+                resultsEl.classList.remove('active');
+                // Clear both inputs
+                document.getElementById('name-search').value = '';
+                document.getElementById('mobile-name-search').value = '';
+                openFacilityDetail(id);
             });
         });
+    }
+
+    // ===========================================================================
+    //  STATE NAVIGATOR [D11]
+    // ===========================================================================
+    function wireStateNav() {
+        const input = document.getElementById('state-nav');
+        const results = document.getElementById('state-nav-results');
+        if (!input || !results) return;
+
+        let kbIndex = -1;
+
+        input.addEventListener('input', () => {
+            const q = input.value.trim().toLowerCase();
+            if (q.length === 0) { results.classList.remove('active'); input.setAttribute('aria-expanded', 'false'); return; }
+            const matches = US_STATES.filter(s =>
+                s.n.toLowerCase().startsWith(q) || s.s.toLowerCase() === q
+            ).slice(0, 8);
+            if (matches.length === 0) { results.classList.remove('active'); return; }
+            results.innerHTML = matches.map((s, i) =>
+                `<div class="state-nav-item" data-idx="${i}" role="option">${escapeHtml(s.n)} (${s.s})</div>`
+            ).join('');
+            results.classList.add('active');
+            input.setAttribute('aria-expanded', 'true');
+            kbIndex = -1;
+
+            results.querySelectorAll('.state-nav-item').forEach((el, i) => {
+                el.addEventListener('click', () => {
+                    const st = matches[i];
+                    map.setView([st.lat, st.lng], 7);
+                    input.value = '';
+                    results.classList.remove('active');
+                    input.setAttribute('aria-expanded', 'false');
+                });
+            });
+        });
+
+        input.addEventListener('keydown', e => {
+            const items = results.querySelectorAll('.state-nav-item');
+            if (e.key === 'ArrowDown') { e.preventDefault(); kbIndex = Math.min(kbIndex + 1, items.length - 1); updateStateKb(items, kbIndex); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); kbIndex = Math.max(kbIndex - 1, -1); updateStateKb(items, kbIndex); }
+            else if (e.key === 'Enter' && kbIndex >= 0 && items[kbIndex]) { e.preventDefault(); items[kbIndex].click(); }
+            else if (e.key === 'Escape') { results.classList.remove('active'); input.setAttribute('aria-expanded', 'false'); }
+        });
+
+        document.addEventListener('click', e => {
+            if (!e.target.closest('.state-nav-wrap')) { results.classList.remove('active'); input.setAttribute('aria-expanded', 'false'); }
+        });
+    }
+
+    function updateStateKb(items, idx) {
+        items.forEach((el, i) => el.classList.toggle('kb-active', i === idx));
+    }
+
+    // ===========================================================================
+    //  VIEWPORT QUERY
+    // ===========================================================================
+    async function fetchInView() {
+        if (!map) return;
+        if (!isOnline) return;
+
+        const center = map.getCenter();
+        const radius = getViewportRadiusMiles(); // [D2]
+        const types = Array.from(activeTypes);
+
+        if (types.length === 0) {
+            clusterLayer.clearLayers();
+            currentFacilities = [];
+            updateStats([]);
+            showEmptyState('no-types');
+            return;
+        }
+
+        const minScore = parseFloat(
+            (isMobile ? document.getElementById('mobile-min-score') : document.getElementById('min-score'))?.value
+        ) || 0;
+
+        const params = {
+            p_lat: center.lat,
+            p_lng: center.lng,
+            p_radius_miles: radius,
+            p_types: types,
+            p_min_score: minScore || null,
+            p_require_nicu:     activeSpecialties.nicu     || null,
+            p_require_cath:     activeSpecialties.cath     || null,
+            p_require_trauma:   activeSpecialties.trauma   || null,
+            p_require_teaching: activeSpecialties.teaching || null,
+            p_require_er:       activeSpecialties.er       || null,
+            p_limit: 500,
+        };
+
+        showLoading(true);
+        try {
+            if (inflightController) inflightController.abort();
+            inflightController = new AbortController();
+
+            const { data, error } = await sb.rpc('nearby_facilities', params);
+            if (error) throw error;
+
+            currentFacilities = data || [];
+            renderMarkers(currentFacilities);
+            updateStats(currentFacilities);
+
+            if (currentFacilities.length === 0) {
+                showEmptyState('no-results');
+            }
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.error('nearby_facilities failed', err);
+                showErrorState(err);
+            }
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // ===========================================================================
+    //  MARKERS
+    // ===========================================================================
+    function renderMarkers(facilities) {
+        clusterLayer.clearLayers();
+
+        let filtered = facilities;
+        if (activeLegendFilters.size > 0) {
+            filtered = facilities.filter(f => activeLegendFilters.has(f.score_classification || 'Unrated'));
+        }
+
+        // Sort [D10]
+        if (sortBy === 'score') {
+            filtered = [...filtered].sort((a, b) => (b.final_score || 0) - (a.final_score || 0));
+        }
+
+        const markerRadius = isMobile ? 8 : 6;
+
+        const markers = filtered.map(f => {
+            if (f.latitude == null || f.longitude == null) return null;
+            const color = classColor(f.score_classification);
+            const marker = L.circleMarker([f.latitude, f.longitude], {
+                radius: markerRadius,
+                fillColor: color,
+                color: '#fff',
+                weight: 1.2,
+                opacity: 1,
+                fillOpacity: 0.88,
+                _classification: f.score_classification || 'Unrated',
+                bubblingMouseEvents: false,
+            });
+
+            // [M8] On mobile: tap opens bottom sheet; on desktop: popup + detail
+            if (isMobile) {
+                marker.on('click', () => openFacilityDetail(f.facility_id));
+            } else {
+                marker.bindPopup(buildPopup(f), { maxWidth: 240 });
+                marker.on('click', () => openFacilityDetail(f.facility_id));
+            }
+            return marker;
+        }).filter(Boolean);
+
+        clusterLayer.addLayers(markers);
+    }
+
+    function buildPopup(f) {
+        const score = f.final_score != null ? f.final_score.toFixed(1) : '—';
+        return `<div>
+            <strong>${escapeHtml(f.facility_name || '')}</strong><br>
+            <span style="color:var(--text-secondary);font-size:11px;">${escapeHtml(TYPE_LABEL[f.facility_type] || '')}</span><br>
+            <span style="display:inline-block;padding:2px 8px;margin-top:4px;border-radius:10px;font-size:11px;font-weight:600;background:${classColor(f.score_classification)};color:#2C3E50;">
+                ${score} · ${escapeHtml(f.score_classification || 'Unrated')}
+            </span>
+        </div>`;
+    }
+
+    function updateStats(rows) {
+        const scored = rows.filter(r => r.final_score != null);
+        const total = rows.length;
+        const avg = scored.length > 0
+            ? (scored.reduce((s, r) => s + r.final_score, 0) / scored.length).toFixed(1)
+            : '—';
+        const high = scored.filter(r =>
+            r.score_classification === 'Above Average' || r.score_classification === 'Exceptional'
+        ).length;
+
+        document.getElementById('total-count').textContent = total.toLocaleString();
+        document.getElementById('avg-score').textContent = avg;
+        document.getElementById('high-quality').textContent = high.toLocaleString();
+    }
+
+    // ===========================================================================
+    //  EMPTY / ERROR STATES [D6] [D7]
+    // ===========================================================================
+    function showEmptyState(reason) {
+        // Only show on desktop's info panel area or as a map overlay
+        const el = document.getElementById('map-empty-overlay');
+        if (el) el.remove();
+
+        if (currentFacilities.length > 0) return;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'map-empty-overlay';
+        overlay.className = 'empty-state';
+        overlay.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,0.08);';
+        if (reason === 'no-types') {
+            overlay.innerHTML = `
+                <i class="fas fa-filter" aria-hidden="true"></i>
+                <h4>No facility types selected</h4>
+                <p>Enable at least one facility type to see results.</p>
+            `;
+        } else {
+            overlay.innerHTML = `
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <h4>No facilities found</h4>
+                <p>Try zooming out, moving the map, or adjusting your filters.</p>
+                <button class="clear-filters-btn" onclick="clearAllFilters()">Clear All Filters</button>
+            `;
+        }
+        document.getElementById('map-page').appendChild(overlay);
+    }
+
+    function showErrorState(err) {
+        const el = document.getElementById('map-empty-overlay');
+        if (el) el.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'map-empty-overlay';
+        overlay.className = 'error-state';
+        overlay.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,0.08);';
+        overlay.innerHTML = `
+            <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+            <h4>Unable to load facilities</h4>
+            <p>${escapeHtml(err.message || 'Connection error')}</p>
+            <button class="retry-btn" onclick="fetchInView(); this.closest('.error-state').remove();">Retry</button>
+            <a class="error-link" href="https://status.supabase.com" target="_blank" rel="noopener noreferrer">Check Supabase status</a>
+        `;
+        document.getElementById('map-page').appendChild(overlay);
+    }
+
+    function clearAllFilters() {
+        activeTypes = new Set(FACILITY_TYPES.map(t => t.value));
+        Object.keys(activeSpecialties).forEach(k => activeSpecialties[k] = false);
+        activeLegendFilters.clear();
+        ['min-score', 'mobile-min-score'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '0';
+        });
+        syncTypeChips();
+        document.querySelectorAll('.filter-chip').forEach(c => {
+            c.classList.remove('active');
+            c.setAttribute('aria-checked', 'false');
+        });
+        document.querySelectorAll('.legend-item').forEach(li => li.classList.remove('active-filter'));
+        const overlay = document.getElementById('map-empty-overlay');
+        if (overlay) overlay.remove();
+        fetchInView();
+    }
+
+    // ===========================================================================
+    //  DETAIL PANEL
+    // ===========================================================================
+    async function openFacilityDetail(facilityId) {
+        openFacilityId = facilityId;
+        pushUrlState(false); // [D4] pushState
+
+        // [D17] Dynamic title
+        document.title = 'Loading… — ForThePatient';
+
+        if (isMobile) {
+            showDetailSheet(facilityId);
+        } else {
+            const panel = document.getElementById('info-panel');
+            const target = document.getElementById('facility-info-content');
+            target.innerHTML = buildSkeletonHtml(); // [D8]
+            panel.classList.add('active');
+        }
+
+        // Remove empty overlay if present
+        const overlay = document.getElementById('map-empty-overlay');
+        if (overlay) overlay.remove();
+
+        try {
+            const { data, error } = await sb.rpc('facility_detail', { p_facility_id: facilityId });
+            if (error) throw error;
+            if (!data) throw new Error('No data');
+
+            const html = buildFacilityDetailHtml(data);
+            if (isMobile) {
+                document.getElementById('detail-sheet-body').innerHTML = html;
+            } else {
+                document.getElementById('facility-info-content').innerHTML = html;
+            }
+
+            // [D17] Title update
+            const f = data.facility || data;
+            const score = f.final_score != null ? f.final_score.toFixed(1) : '';
+            document.title = `${f.facility_name || 'Facility'} — Quality Score${score ? ' ' + score : ''} | ForThePatient`;
+
+            trackEvent('facility_open', { id: facilityId });
+        } catch (err) {
+            console.error('facility_detail failed', err);
+            const errorHtml = `<div class="error-state">
+                <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+                <h4>Couldn't load facility</h4>
+                <p>${escapeHtml(err.message || '')}</p>
+                <button class="retry-btn" onclick="openFacilityDetail('${escapeHtml(facilityId)}')">Retry</button>
+            </div>`;
+            if (isMobile) {
+                document.getElementById('detail-sheet-body').innerHTML = errorHtml;
+            } else {
+                document.getElementById('facility-info-content').innerHTML = errorHtml;
+            }
+        }
+    }
+
+    // [D8] Loading skeleton
+    function buildSkeletonHtml() {
+        return `<div class="facility-info" style="padding-top:14px;">
+            <div style="display:flex;justify-content:flex-end;gap:4px;margin-bottom:8px;">
+                <div class="skeleton-block" style="width:32px;height:32px;border-radius:6px;"></div>
+                <div class="skeleton-block" style="width:32px;height:32px;border-radius:6px;"></div>
+                <div class="skeleton-block" style="width:32px;height:32px;border-radius:6px;"></div>
+            </div>
+            <div class="skeleton-block skeleton-line w70"></div>
+            <div class="skeleton-block skeleton-line w40" style="height:8px;margin-bottom:14px;"></div>
+            <div style="display:flex;gap:14px;align-items:center;margin-bottom:20px;">
+                <div class="skeleton-block skeleton-circle"></div>
+                <div style="flex:1;">
+                    <div class="skeleton-block skeleton-line w50"></div>
+                    <div class="skeleton-block skeleton-line w40" style="height:8px;"></div>
+                </div>
+            </div>
+            <div class="skeleton-block skeleton-line w40" style="height:8px;margin-bottom:14px;"></div>
+            ${[1,2,3,4].map(() => `
+                <div class="skeleton-block skeleton-line w90"></div>
+                <div class="skeleton-block skeleton-bar"></div>
+            `).join('')}
+            <div style="margin-top:18px;">
+                <div class="skeleton-block skeleton-line w70"></div>
+                <div class="skeleton-block skeleton-line w50"></div>
+            </div>
+        </div>`;
+    }
+
+    function buildFacilityDetailHtml(payload) {
+        const f = payload.facility || payload;
+        const components = payload.components || [];
+        const enforcement = payload.enforcement || [];
+
+        const score = f.final_score != null ? f.final_score.toFixed(1) : '—';
+        const cls = f.score_classification || 'Unrated';
+        const cmsStars = f.cms_overall_rating || f.overall_rating || null;
+
+        const componentHtml = components.length === 0
+            ? `<div class="component-na">No component data available</div>`
+            : components
+                .sort((a, b) => (a.component_order || 0) - (b.component_order || 0))
+                .map(c => {
+                    const compScore = c.component_score != null ? c.component_score.toFixed(1) : '—';
+                    const wt = c.component_weight != null ? Math.round(c.component_weight * 100) + '%' : '';
+                    const fillPct = c.component_score != null
+                        ? Math.max(0, Math.min(100, (c.component_score / 10) * 100)) : 0;
+                    return `<div>
+                        <div class="component-row">
+                            <div class="component-name">${escapeHtml(c.component_name || '')}</div>
+                            <div class="component-weight">${wt}</div>
+                            <div class="component-score">${compScore}</div>
+                        </div>
+                        <div class="component-bar"><div class="component-bar-fill" style="width:${fillPct}%;background:${scoreToBarColor(c.component_score)}"></div></div>
+                    </div>`;
+                }).join('');
+
+        const badges = [];
+        if (truthy(f.teaching_status))     badges.push('Teaching');
+        if (truthy(f.has_cardiac_cath_lab)) badges.push('Cardiac Cath');
+        if (truthy(f.has_cardiac_surgery))  badges.push('Cardiac Surgery');
+        if (truthy(f.nicu_level))           badges.push('NICU');
+        if (truthy(f.has_trauma_center))    badges.push('Trauma Center');
+        if (truthy(f.has_burn_unit))        badges.push('Burn Unit');
+        if (truthy(f.has_organ_transplant)) badges.push('Transplant');
+        if (truthy(f.has_mri))             badges.push('MRI');
+        if (f.case_mix_index != null)       badges.push(`CMI ${Number(f.case_mix_index).toFixed(2)}`);
+
+        const badgesHtml = badges.length > 0
+            ? `<div class="specialty-badges">${badges.map(b => `<span class="spec-badge">${escapeHtml(b)}</span>`).join('')}</div>`
+            : '';
+
+        const enforcementHtml = enforcement.length > 0
+            ? `<div class="enforcement-block">
+                   <div class="enforcement-title"><i class="fas fa-gavel" aria-hidden="true"></i> ${enforcement.length} regulatory action${enforcement.length === 1 ? '' : 's'}</div>
+                   ${enforcement.slice(0, 5).map(e => `
+                       <div class="enforcement-amt">
+                           ${escapeHtml(e.penalty_type || 'Penalty')}
+                           ${e.amount ? ' · $' + Number(e.amount).toLocaleString() : ''}
+                           ${e.penalty_date ? ' · ' + escapeHtml(String(e.penalty_date).slice(0,10)) : ''}
+                       </div>
+                   `).join('')}
+                   ${enforcement.length > 5 ? `<div class="enforcement-amt">+ ${enforcement.length - 5} more</div>` : ''}
+               </div>`
+            : '';
+
+        const cmsLine = cmsStars
+            ? `<span class="cms-stars">CMS overall: ${'<i class="fas fa-star star-icon" aria-hidden="true"></i>'.repeat(Math.round(cmsStars))} ${cmsStars}/5</span>`
+            : '';
+
+        // Build share URL [D15]
+        const shareUrl = `${window.location.origin}${window.location.pathname}?fid=${encodeURIComponent(f.facility_id)}`;
+
+        return `<div class="facility-info">
+            <div class="detail-header-actions">
+                <button class="detail-action-btn" onclick="copyFacilityLink('${escapeHtml(f.facility_id)}')" aria-label="Copy link to this facility" title="Copy link">
+                    <i class="fas fa-link" aria-hidden="true"></i>
+                </button>
+                <button class="detail-action-btn" onclick="shareFacility('${escapeHtml(f.facility_id)}', '${escapeHtml(f.facility_name)}')" aria-label="Share this facility" title="Share">
+                    <i class="fas fa-share-nodes" aria-hidden="true"></i>
+                </button>
+                <button class="detail-action-btn" onclick="togglePinPanel()" aria-label="Pin panel to side" title="Pin panel">
+                    <i class="fas fa-thumbtack" aria-hidden="true"></i>
+                </button>
+                <button class="detail-action-btn" onclick="closeFacilityInfo()" aria-label="Close detail panel" title="Close">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div class="facility-header">
+                <h2 class="facility-name">${escapeHtml(f.facility_name || '')}</h2>
+                <div class="facility-type-line">${escapeHtml(TYPE_LABEL[f.facility_type] || f.facility_type || '')}</div>
+
+                <div class="score-block">
+                    <div class="score-circle ${cls === 'Unrated' ? 'unrated' : ''}" style="background:${classColor(cls)}">${score}</div>
+                    <div class="score-meta">
+                        <span class="classification-badge ${classBadgeClass(cls)}" style="background:${classColor(cls)}">${escapeHtml(cls)}</span>
+                        <span class="score-out-of">FTP score · 10-point scale</span>
+                        ${cmsLine}
+                    </div>
+                </div>
+                ${badgesHtml}
+            </div>
+
+            <h3 class="section-header">Component breakdown</h3>
+            ${componentHtml}
+            ${enforcementHtml}
+
+            <div class="addr-block">
+                ${f.address || f.address_line_1 ? `<div><i class="fas fa-map-marker-alt" aria-hidden="true"></i>${escapeHtml(f.address || f.address_line_1 || '')}</div>` : ''}
+                <div style="padding-left:20px">${escapeHtml(f.city || '')}${f.city ? ', ' : ''}${escapeHtml(f.state || '')} ${escapeHtml(f.zip_code || '')}</div>
+                ${f.phone ? `<div><i class="fas fa-phone" aria-hidden="true"></i>${escapeHtml(f.phone)}</div>` : ''}
+            </div>
+
+            <a href="https://maps.google.com/?q=${f.latitude},${f.longitude}" target="_blank" rel="noopener noreferrer" class="directions-btn">
+                Get Directions
+            </a>
+
+            <div class="print-methodology-url">
+                Methodology: https://forthepatient.org/methodology · Data: CMS public use files
+            </div>
+        </div>`;
+    }
+
+    function closeFacilityInfo() {
+        openFacilityId = null;
+        document.title = 'For The Patient — Healthcare Quality Map';
+
+        if (isMobile) {
+            setSheetSnap('detail-sheet', 0);
+        } else {
+            document.getElementById('info-panel').classList.remove('active');
+            document.getElementById('info-panel').classList.remove('pinned');
+        }
+        pushUrlState(true);
+    }
+
+    // [D15] Copy link
+    function copyFacilityLink(id) {
+        const url = `${window.location.origin}${window.location.pathname}?fid=${encodeURIComponent(id)}`;
+        navigator.clipboard.writeText(url).then(() => {
+            // Brief visual feedback
+            const btn = document.querySelector('.detail-action-btn[onclick*="copyFacilityLink"]');
+            if (btn) {
+                const icon = btn.querySelector('i');
+                icon.className = 'fas fa-check';
+                setTimeout(() => { icon.className = 'fas fa-link'; }, 1500);
+            }
+        }).catch(() => {});
+        trackEvent('share_copy_link', { id });
+    }
+
+    // [D15] Share
+    function shareFacility(id, name) {
+        const url = `${window.location.origin}${window.location.pathname}?fid=${encodeURIComponent(id)}`;
+        if (navigator.share) {
+            navigator.share({
+                title: `${name} — Quality Score | ForThePatient`,
+                url: url,
+            }).catch(() => {});
+        } else {
+            copyFacilityLink(id);
+        }
+        trackEvent('share_click', { id });
+    }
+
+    // [D5] Pin toggle
+    function togglePinPanel() {
+        const panel = document.getElementById('info-panel');
+        detailPanelPinned = !detailPanelPinned;
+        panel.classList.toggle('pinned', detailPanelPinned);
+        if (detailPanelPinned) {
+            panel.style.width = '';
+        }
+        setTimeout(() => map.invalidateSize(), 350);
+    }
+
+    // ===========================================================================
+    //  BOTTOM SHEETS (Mobile) [M1]
+    // ===========================================================================
+    function showDetailSheet(facilityId) {
+        const sheet = document.getElementById('detail-sheet');
+        document.getElementById('detail-sheet-body').innerHTML = buildSkeletonHtml();
+        setSheetSnap('detail-sheet', 'half');
+    }
+
+    function setupBottomSheets() {
+        setupSheet('filter-sheet', 'filter-sheet-handle');
+        setupSheet('detail-sheet', 'detail-sheet-handle');
+
+        // Start filter sheet at peek
+        if (isMobile) {
+            setSheetSnap('filter-sheet', 'peek');
+        }
+    }
+
+    function setupSheet(sheetId, handleId) {
+        const sheet = document.getElementById(sheetId);
+        const handle = document.getElementById(handleId);
+        if (!sheet || !handle) return;
+
+        const snaps = { peek: 64, half: window.innerHeight * 0.5, full: window.innerHeight * 0.9 };
+        let currentSnap = 'peek';
+        let startY, startH, isDragging = false;
+
+        function setHeight(h) {
+            sheet.style.height = Math.max(0, h) + 'px';
+        }
+
+        handle.addEventListener('touchstart', e => {
+            isDragging = true;
+            startY = e.touches[0].clientY;
+            startH = sheet.offsetHeight;
+            sheet.style.transition = 'none';
+        }, { passive: true });
+
+        handle.addEventListener('touchmove', e => {
+            if (!isDragging) return;
+            const dy = startY - e.touches[0].clientY;
+            setHeight(Math.min(snaps.full, Math.max(0, startH + dy)));
+        }, { passive: true });
+
+        handle.addEventListener('touchend', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            sheet.style.transition = 'height 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)';
+            const h = sheet.offsetHeight;
+            // Snap to nearest
+            const snapKeys = Object.keys(snaps);
+            let best = snapKeys[0];
+            let bestDist = Infinity;
+            snapKeys.forEach(k => {
+                const d = Math.abs(h - snaps[k]);
+                if (d < bestDist) { bestDist = d; best = k; }
+            });
+            // If dragged very low, close
+            if (h < 40) best = 'closed';
+            currentSnap = best;
+            if (best === 'closed') {
+                setHeight(0);
+                if (sheetId === 'detail-sheet') closeFacilityInfo();
+            } else {
+                setHeight(snaps[best]);
+            }
+            haptic(10);
+        }, { passive: true });
+
+        sheet._setSnap = (snap) => {
+            sheet.style.transition = 'height 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)';
+            const targetSnaps = { peek: 64, half: window.innerHeight * 0.5, full: window.innerHeight * 0.9 };
+            if (snap === 0 || snap === 'closed') {
+                setHeight(0);
+            } else {
+                setHeight(targetSnaps[snap] || 64);
+            }
+            currentSnap = snap;
+        };
+    }
+
+    function setSheetSnap(sheetId, snap) {
+        const sheet = document.getElementById(sheetId);
+        if (sheet && sheet._setSnap) sheet._setSnap(snap);
+    }
+
+    // ===========================================================================
+    //  UI HELPERS
+    // ===========================================================================
+    function showLoading(active) {
+        const el = document.getElementById('query-loading');
+        if (active) el.classList.add('active');
+        else el.classList.remove('active');
+    }
+
+    function toggleSearchPanel() {
+        const panel = document.getElementById('search-panel');
+        const text = document.getElementById('collapse-text');
+        const btn = panel.querySelector('.collapse-toggle');
+        panel.classList.toggle('collapsed');
+        const collapsed = panel.classList.contains('collapsed');
+        text.textContent = collapsed ? 'Show Filters' : 'Hide Filters';
+        btn.setAttribute('aria-expanded', !collapsed);
+    }
+
+    function showMap() {
+        document.getElementById('map-page').style.display = 'block';
+        document.getElementById('about-page').classList.remove('active');
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        document.querySelectorAll('.nav-link')[0].classList.add('active');
+        setTimeout(() => map && map.invalidateSize(), 100);
+    }
+
+    function showAbout() {
+        document.getElementById('map-page').style.display = 'none';
+        document.getElementById('about-page').classList.add('active');
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        document.querySelectorAll('.nav-link')[1].classList.add('active');
+    }
+
+    function toggleTheme() {
+        currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', currentTheme);
+        try { localStorage.setItem('theme', currentTheme); } catch (e) {}
+
+        const btn = document.getElementById('theme-toggle-btn');
+        btn.classList.toggle('active', currentTheme === 'dark');
+        btn.setAttribute('aria-checked', currentTheme === 'dark');
+        btn.querySelector('.toggle-slider i').className =
+            currentTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+
+        // Update meta theme-color
+        document.querySelector('meta[name="theme-color"]').content =
+            currentTheme === 'dark' ? '#1A1F36' : '#FDF8F0';
+
+        // Swap tile layer
+        map.eachLayer(layer => {
+            if (layer instanceof L.TileLayer) map.removeLayer(layer);
+        });
+        const tileUrl = currentTheme === 'dark'
+            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+            : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+        L.tileLayer(tileUrl, {
+            attribution: '&copy; CARTO &middot; CMS public data',
+            subdomains: 'abcd',
+            maxZoom: 20,
+        }).addTo(map);
+
+        pushUrlState(true);
+    }
+
+    // ===========================================================================
+    //  OFFLINE DETECTION [M12]
+    // ===========================================================================
+    function setupOfflineDetection() {
+        const toast = document.getElementById('offline-toast');
+        window.addEventListener('offline', () => {
+            isOnline = false;
+            toast.classList.add('active');
+        });
+        window.addEventListener('online', () => {
+            isOnline = true;
+            toast.classList.remove('active');
+            fetchInView(); // Refresh on reconnect
+        });
+    }
+
+    // ===========================================================================
+    //  ANALYTICS (privacy-respecting) [D18]
+    // ===========================================================================
+    function trackEvent(name, props) {
+        // Plausible integration: if loaded, use its API
+        if (window.plausible) {
+            try { window.plausible(name, { props }); } catch(e) {}
+        }
+        // No fallback tracking — Plausible or nothing
+    }
+    function hashStr(s) {
+        // Simple hash for privacy — never send raw queries
+        let h = 0;
+        for (let i = 0; i < s.length; i++) {
+            h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+        }
+        return h.toString(36);
+    }
+
+    // ===========================================================================
+    //  KEYBOARD SHORTCUTS [D12]
+    // ===========================================================================
+    function setupKeyboardShortcuts() {
+        document.addEventListener('keydown', e => {
+            // / to focus search
+            if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.target.closest('input, select, textarea')) {
+                e.preventDefault();
+                const input = isMobile
+                    ? document.getElementById('mobile-name-search')
+                    : document.getElementById('name-search');
+                if (input) input.focus();
+            }
+            // Escape to close detail panel
+            if (e.key === 'Escape') {
+                if (openFacilityId) closeFacilityInfo();
+            }
+        });
+    }
+
+    // ===========================================================================
+    //  BOOT
+    // ===========================================================================
+    window.addEventListener('load', () => {
+        checkMobile();
+        window.addEventListener('resize', debounce(() => {
+            checkMobile();
+            if (isMobile) setupBottomSheets();
+        }, 200));
+
+        // Theme from URL > localStorage > default
+        const urlState = getUrlState();
+        const savedTheme = urlState.theme || (function() {
+            try { return localStorage.getItem('theme'); } catch(e) { return null; }
+        })() || 'light';
+        currentTheme = savedTheme;
+        document.documentElement.setAttribute('data-theme', currentTheme);
+        if (currentTheme === 'dark') {
+            const btn = document.getElementById('theme-toggle-btn');
+            btn.classList.add('active');
+            btn.setAttribute('aria-checked', 'true');
+            btn.querySelector('.toggle-slider i').className = 'fas fa-moon';
+            document.querySelector('meta[name="theme-color"]').content = '#1A1F36';
+        }
+
+        initMap();
+        setupOfflineDetection();
+        setupKeyboardShortcuts();
+
+        if (isMobile) {
+            setupBottomSheets();
+        }
+    });
     </script>
 </body>
 </html>
