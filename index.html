@@ -3,6 +3,16 @@
   =========================================
   From v2.0 (Session G):
 
+  BUGFIX (critical):
+  - Replaced L.circleMarker with L.marker + L.divIcon in renderMarkers().
+    L.circleMarker renders on HTML5 Canvas when preferCanvas:true is set,
+    and L.markerClusterGroup cannot manage canvas-rendered paths — it needs
+    DOM-based markers to show/hide/position for clustering. This caused
+    most markers to silently disappear.
+  - Added comprehensive [FTP] console logging to the data pipeline:
+    viewport radius, RPC params, result counts, type breakdown, coordinate
+    validation. Open DevTools console to see the full query/render flow.
+
   DESKTOP:
   - [D1]  Marker clustering via Leaflet.markercluster with classification-colored clusters and pie-chart distribution
   - [D2]  Viewport radius computed from map.getBounds() diagonal, clamped 2–2000 mi. Replaces zoom lookup table.
@@ -49,7 +59,7 @@
   - [A7] Color contrast fixes for dark mode average badge.
 
   PERFORMANCE:
-  - [P1] Canvas renderer for markers (preferCanvas: true retained).
+  - [P1] DOM-based markers (L.divIcon) for markerCluster compatibility. Canvas retained for tile/path rendering.
   - [P2] Cluster layer handles 500+ markers efficiently.
   - [P3] requestIdleCallback defers non-critical UI setup.
   - [P4] CDN JS budget < 300KB gzipped (Leaflet ~40KB + markercluster ~10KB + Supabase ~30KB + FA icons).
@@ -1114,6 +1124,19 @@
             top: 0; left: 0;
         }
 
+        /* DOM-based dot markers (L.divIcon) — required for markerCluster compatibility */
+        .ftp-dot {
+            border-radius: 50%;
+            border: 1.5px solid #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .ftp-dot:hover {
+            transform: scale(1.3);
+            z-index: 1000 !important;
+        }
+
         /* Scrollbar styling */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: var(--bg); }
@@ -1550,7 +1573,9 @@
         // Diagonal distance in meters, convert to miles
         const diagMeters = map.distance(ne, sw);
         const halfDiagMiles = (diagMeters / 1609.344) / 2;
-        return Math.max(2, Math.min(2000, Math.ceil(halfDiagMiles)));
+        const clamped = Math.max(2, Math.min(2000, Math.ceil(halfDiagMiles)));
+        console.log(`[FTP] Viewport radius: diagonal=${Math.round(diagMeters)}m, halfDiag=${halfDiagMiles.toFixed(1)}mi, clamped=${clamped}mi`);
+        return clamped;
     }
 
     // ===========================================================================
@@ -2122,6 +2147,8 @@
         const radius = getViewportRadiusMiles(); // [D2]
         const types = Array.from(activeTypes);
 
+        console.log(`[FTP] fetchInView: center=(${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}), radius=${radius}mi, types=[${types.join(',')}], zoom=${map.getZoom()}`);
+
         if (types.length === 0) {
             clusterLayer.clearLayers();
             currentFacilities = [];
@@ -2148,6 +2175,8 @@
             p_limit: 500,
         };
 
+        console.log('[FTP] RPC params:', JSON.stringify(params));
+
         showLoading(true);
         try {
             if (inflightController) inflightController.abort();
@@ -2157,15 +2186,30 @@
             if (error) throw error;
 
             currentFacilities = data || [];
+            console.log(`[FTP] RPC returned ${currentFacilities.length} facilities`);
+            if (currentFacilities.length > 0) {
+                console.log('[FTP] Sample facility:', JSON.stringify(currentFacilities[0]));
+                const withCoords = currentFacilities.filter(f => f.latitude != null && f.longitude != null);
+                console.log(`[FTP] ${withCoords.length} of ${currentFacilities.length} have valid coordinates`);
+                // Log type breakdown
+                const typeCounts = {};
+                currentFacilities.forEach(f => { typeCounts[f.facility_type] = (typeCounts[f.facility_type] || 0) + 1; });
+                console.log('[FTP] Type breakdown:', JSON.stringify(typeCounts));
+            }
+
             renderMarkers(currentFacilities);
             updateStats(currentFacilities);
+
+            // Remove any existing empty/error overlay
+            const overlay = document.getElementById('map-empty-overlay');
+            if (overlay && currentFacilities.length > 0) overlay.remove();
 
             if (currentFacilities.length === 0) {
                 showEmptyState('no-results');
             }
         } catch (err) {
             if (err.name !== 'AbortError') {
-                console.error('nearby_facilities failed', err);
+                console.error('[FTP] nearby_facilities failed:', err);
                 showErrorState(err);
             }
         } finally {
@@ -2189,20 +2233,24 @@
             filtered = [...filtered].sort((a, b) => (b.final_score || 0) - (a.final_score || 0));
         }
 
-        const markerRadius = isMobile ? 8 : 6;
+        // DOM-based dot size: must use L.marker + L.divIcon (not L.circleMarker)
+        // because L.circleMarker renders on canvas (preferCanvas:true) and
+        // L.markerClusterGroup cannot manage canvas-rendered paths.
+        const dotSize = isMobile ? 14 : 12;
 
         const markers = filtered.map(f => {
             if (f.latitude == null || f.longitude == null) return null;
             const color = classColor(f.score_classification);
-            const marker = L.circleMarker([f.latitude, f.longitude], {
-                radius: markerRadius,
-                fillColor: color,
-                color: '#fff',
-                weight: 1.2,
-                opacity: 1,
-                fillOpacity: 0.88,
+            const icon = L.divIcon({
+                className: '',
+                html: `<div class="ftp-dot" style="background:${color};width:${dotSize}px;height:${dotSize}px;"></div>`,
+                iconSize: [dotSize, dotSize],
+                iconAnchor: [dotSize / 2, dotSize / 2],
+            });
+            const marker = L.marker([f.latitude, f.longitude], {
+                icon: icon,
                 _classification: f.score_classification || 'Unrated',
-                bubblingMouseEvents: false,
+                _facilityId: f.facility_id,
             });
 
             // [M8] On mobile: tap opens bottom sheet; on desktop: popup + detail
@@ -2215,6 +2263,7 @@
             return marker;
         }).filter(Boolean);
 
+        console.log(`[FTP] renderMarkers: ${facilities.length} total, ${filtered.length} after legend filter, ${markers.length} with valid coords`);
         clusterLayer.addLayers(markers);
     }
 
