@@ -1,4 +1,22 @@
 <!--
+  CHANGELOG v3.1 (Session H-FIX — April 2026)
+  =============================================
+  From v3.0 (Session H):
+
+  BUGFIX (critical — data pipeline):
+  - Fixed specialty filter params sending null instead of false to the
+    nearby_facilities RPC. PostgreSQL evaluates NOT NULL as NULL (not TRUE),
+    which caused every row where specialty columns were NULL/false to be
+    excluded. This was a single root cause for TWO bugs:
+    (1) All non-hospital facility types invisible (89% of facilities)
+    (2) Only ~245 hospitals visible (those with ALL 5 specialty features)
+  - Changed p_require_* params from `activeSpecialties.x || null` to
+    `!!activeSpecialties.x` (always sends boolean false, never null).
+  - Increased p_limit from 500 to 2000 for better national-view coverage.
+  - Corresponding RPC fix (run migration separately) adds COALESCE defense.
+
+  See Session H-FIX diagnostic report for full root cause analysis.
+
   CHANGELOG v3.0 (Session H — April 2026)
   =========================================
   From v2.0 (Session G):
@@ -2167,12 +2185,16 @@
             p_radius_miles: radius,
             p_types: types,
             p_min_score: minScore || null,
-            p_require_nicu:     activeSpecialties.nicu     || null,
-            p_require_cath:     activeSpecialties.cath     || null,
-            p_require_trauma:   activeSpecialties.trauma   || null,
-            p_require_teaching: activeSpecialties.teaching || null,
-            p_require_er:       activeSpecialties.er       || null,
-            p_limit: 500,
+            // CRITICAL: send false, NOT null. PostgreSQL NOT NULL = NULL, which
+            // silently excludes every row where the specialty column is NULL/false.
+            // This was the root cause of Bug 1 (non-hospitals invisible) and
+            // Bug 2 (~245 cap) — see Session H-FIX diagnostic report.
+            p_require_nicu:     !!activeSpecialties.nicu,
+            p_require_cath:     !!activeSpecialties.cath,
+            p_require_trauma:   !!activeSpecialties.trauma,
+            p_require_teaching: !!activeSpecialties.teaching,
+            p_require_er:       !!activeSpecialties.er,
+            p_limit: 2000,
         };
 
         console.log('[FTP] RPC params:', JSON.stringify(params));
