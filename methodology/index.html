@@ -1,0 +1,407 @@
+<!--
+  ForThePatient.org — Scoring Methodology (Session I)
+  Static content page matching v4.0 design system.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+    <title>Scoring Methodology — For The Patient</title>
+    <meta name="description" content="Complete scoring methodology for ForThePatient.org. How we calculate quality scores for hospitals, nursing homes, dialysis centers, home health, hospice, IRF, and LTCH facilities.">
+    <meta name="theme-color" content="#FDF8F0">
+    <link rel="canonical" href="https://forthepatient.org/methodology">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root{--bg:#FDF8F0;--card-bg:#FFFFFF;--accent:#5B85C7;--text-primary:#2C3E50;--text-secondary:#7F8C8D;--border:#E1E8ED;--hover-bg:rgba(91,133,199,0.1);--focus-ring:rgba(91,133,199,0.45);--header-h:56px;--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px)}
+        [data-theme="dark"]{--bg:#1A1F36;--card-bg:#2C3E50;--accent:#7FB3D3;--text-primary:#ECF0F1;--text-secondary:#BDC3C7;--border:#34495E;--hover-bg:rgba(127,179,211,0.1);--focus-ring:rgba(127,179,211,0.45)}
+        *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+        html{height:100%;scroll-behavior:smooth}
+        body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-weight:400;background:var(--bg);color:var(--text-primary);line-height:1.6;transition:background-color .3s,color .3s}
+        :focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;border-radius:4px}
+        :focus:not(:focus-visible){outline:none}
+        .header{position:fixed;top:0;left:0;right:0;z-index:1000;background:rgba(255,255,255,.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border);height:calc(var(--header-h) + var(--safe-top));padding-top:var(--safe-top);transition:all .3s}
+        [data-theme="dark"] .header{background:rgba(44,62,80,.95)}
+        .header-inner{max-width:1400px;margin:0 auto;padding:0 16px;padding-left:calc(16px + var(--safe-left));padding-right:calc(16px + var(--safe-right));display:flex;align-items:center;justify-content:space-between;height:var(--header-h)}
+        .logo{font-size:1.15rem;font-weight:600;color:var(--text-primary);letter-spacing:-.02em;white-space:nowrap;text-decoration:none}
+        .logo-sub{font-size:.68rem;color:var(--text-secondary);font-weight:400;text-transform:uppercase;letter-spacing:.06em;margin-left:8px}
+        .header-right{display:flex;align-items:center;gap:10px}
+        .nav-btn{color:var(--text-secondary);text-decoration:none;font-size:.8rem;font-weight:500;padding:6px 10px;border-radius:6px;border:none;background:none;cursor:pointer;font-family:inherit;transition:color .2s,background .2s}
+        .nav-btn:hover,.nav-btn.active{color:var(--accent);background:var(--hover-bg)}
+        .toggle-switch{position:relative;width:44px;height:26px;background:var(--border);border-radius:13px;cursor:pointer;transition:background .3s;border:none;min-width:44px}
+        .toggle-switch.active{background:var(--accent)}
+        .toggle-slider{position:absolute;top:2px;left:2px;width:22px;height:22px;background:var(--card-bg);border-radius:50%;transition:transform .3s;display:flex;align-items:center;justify-content:center;font-size:.65rem;color:var(--text-secondary)}
+        .toggle-switch.active .toggle-slider{transform:translateX(18px)}
+        .page-layout{margin-top:calc(var(--header-h) + var(--safe-top));display:flex;max-width:1100px;margin-left:auto;margin-right:auto;padding:40px 24px 80px;gap:40px;min-height:calc(100vh - var(--header-h) - var(--safe-top))}
+        .toc-sidebar{position:sticky;top:calc(var(--header-h) + var(--safe-top) + 24px);flex-shrink:0;width:220px;max-height:calc(100vh - var(--header-h) - var(--safe-top) - 48px);overflow-y:auto;scrollbar-width:none}
+        .toc-sidebar::-webkit-scrollbar{display:none}
+        .toc-title{font-size:.68rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
+        .toc-link{display:block;font-size:.78rem;color:var(--text-secondary);text-decoration:none;padding:5px 0 5px 12px;border-left:2px solid var(--border);transition:all .15s;line-height:1.4}
+        .toc-link:hover,.toc-link.active{color:var(--accent);border-left-color:var(--accent)}
+        .toc-link.indent{padding-left:24px;font-size:.73rem}
+        .page-body{flex:1;min-width:0;max-width:70ch}
+        .page-title{font-size:2rem;font-weight:700;color:var(--text-primary);margin-bottom:8px;line-height:1.25}
+        .page-subtitle{font-size:1rem;color:var(--text-secondary);margin-bottom:32px;line-height:1.5}
+        .section{margin-bottom:40px}
+        .section-anchor{scroll-margin-top:calc(var(--header-h) + var(--safe-top) + 24px)}
+        .section h2{font-size:1.35rem;font-weight:700;color:var(--text-primary);margin-bottom:14px;line-height:1.3}
+        .section h3{font-size:1.05rem;font-weight:600;color:var(--accent);margin:20px 0 10px}
+        .section h4{font-size:.92rem;font-weight:600;color:var(--text-primary);margin:16px 0 8px}
+        .section p{color:var(--text-secondary);margin-bottom:12px;line-height:1.7}
+        .section ul,.section ol{color:var(--text-secondary);margin:0 0 12px 20px;line-height:1.7}
+        .section li{margin-bottom:6px}
+        .section a{color:var(--accent);text-decoration:underline;text-decoration-color:rgba(91,133,199,.3);text-underline-offset:2px;transition:text-decoration-color .2s}
+        .section a:hover{text-decoration-color:var(--accent)}
+        .section strong{color:var(--text-primary);font-weight:600}
+        .section code{background:var(--hover-bg);padding:2px 6px;border-radius:4px;font-size:.85em;font-family:'SF Mono','Fira Code',monospace}
+        .section blockquote{border-left:3px solid var(--accent);padding:12px 20px;margin:16px 0;background:var(--hover-bg);border-radius:0 8px 8px 0;color:var(--text-secondary)}
+
+        .weight-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.85rem}
+        .weight-table th{text-align:left;padding:10px 12px;background:var(--hover-bg);color:var(--text-primary);font-weight:600;border-bottom:2px solid var(--border);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
+        .weight-table td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text-secondary);vertical-align:top}
+        .weight-table tr:last-child td{border-bottom:none}
+        .weight-bar{display:inline-block;height:6px;border-radius:3px;background:var(--accent);vertical-align:middle;margin-right:6px}
+
+        .formula-block{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin:16px 0;font-family:'SF Mono','Fira Code',monospace;font-size:.82rem;line-height:1.8;overflow-x:auto;box-shadow:0 2px 12px rgba(0,0,0,.04);color:var(--text-secondary)}
+
+        .callout{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:24px;margin:24px 0;box-shadow:0 2px 12px rgba(0,0,0,.04)}
+        .callout-info{border-left:4px solid var(--accent)}
+        .callout-title{font-size:.82rem;font-weight:700;color:var(--text-primary);margin-bottom:8px}
+        .callout p{margin-bottom:8px}
+        .callout p:last-child{margin-bottom:0}
+
+        .class-legend{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+        .class-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:16px;font-size:.75rem;font-weight:500}
+        .class-dot{width:10px;height:10px;border-radius:50%}
+
+        .page-footer{max-width:1100px;margin:0 auto;padding:0 24px 40px;border-top:1px solid var(--border);padding-top:24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+        .footer-links{display:flex;gap:16px;flex-wrap:wrap}
+        .footer-links a{font-size:.75rem;color:var(--text-secondary);text-decoration:none;transition:color .15s}
+        .footer-links a:hover{color:var(--accent)}
+        .footer-copy{font-size:.72rem;color:var(--text-secondary)}
+        @media(max-width:768px){
+            .toc-sidebar{display:none}
+            .page-layout{padding:24px 16px 60px;gap:0}
+            .page-title{font-size:1.5rem}
+            .logo-sub{display:none}
+            .weight-table{font-size:.78rem}
+            .weight-table th,.weight-table td{padding:8px}
+            .formula-block{font-size:.75rem;padding:14px}
+            .page-footer{flex-direction:column;align-items:flex-start}
+        }
+    </style>
+</head>
+<body>
+    <header class="header" role="banner">
+        <div class="header-inner">
+            <div style="display:flex;align-items:baseline"><a href="/" class="logo">For The Patient</a><span class="logo-sub">Healthcare Quality</span></div>
+            <div class="header-right">
+                <a class="nav-btn" href="/" aria-label="Map">Map</a>
+                <a class="nav-btn" href="/about" aria-label="About">About</a>
+                <a class="nav-btn active" href="/methodology" aria-label="Methodology">Method</a>
+                <button class="toggle-switch" id="theme-toggle-btn" onclick="toggleTheme()" role="switch" aria-checked="false" aria-label="Toggle dark mode"><div class="toggle-slider"><i class="fas fa-sun" aria-hidden="true"></i></div></button>
+            </div>
+        </div>
+    </header>
+
+    <div class="page-layout">
+        <nav class="toc-sidebar" aria-label="Table of contents">
+            <div class="toc-title">On this page</div>
+            <a class="toc-link" href="#overview">Overview</a>
+            <a class="toc-link" href="#data-sources">Data Sources</a>
+            <a class="toc-link" href="#scoring-framework">Scoring Framework</a>
+            <a class="toc-link indent" href="#percentile">Percentile Ranking</a>
+            <a class="toc-link indent" href="#recency">Recency Decay</a>
+            <a class="toc-link indent" href="#classification">Score Classification</a>
+            <a class="toc-link" href="#hospitals">Hospitals</a>
+            <a class="toc-link" href="#nursing-homes">Nursing Homes</a>
+            <a class="toc-link" href="#dialysis">Dialysis Centers</a>
+            <a class="toc-link" href="#home-health">Home Health</a>
+            <a class="toc-link" href="#hospice">Hospice</a>
+            <a class="toc-link" href="#irf">IRF</a>
+            <a class="toc-link" href="#ltch">LTCH</a>
+            <a class="toc-link" href="#enforcement">Enforcement Overlay</a>
+            <a class="toc-link" href="#context-fields">Context-Only Fields</a>
+            <a class="toc-link" href="#unrated">Unrated Facilities</a>
+            <a class="toc-link" href="#validation">Validation</a>
+            <a class="toc-link" href="#versioning">Versioning</a>
+        </nav>
+
+        <main class="page-body" role="main">
+            <h1 class="page-title">Scoring Methodology</h1>
+            <p class="page-subtitle">Version 1.9 &middot; Last updated: April 2026 &middot; Covers all 7 facility types and 48,452 facilities.</p>
+
+            <!-- OVERVIEW -->
+            <div class="section" id="overview">
+                <h2 class="section-anchor">Overview</h2>
+                <p>ForThePatient.org assigns every Medicare-certified healthcare facility a composite quality score on a <strong>1.0–10.0 scale</strong>. Scores are built from 4–5 weighted components specific to each facility type, derived entirely from government-mandated reporting data published by the Centers for Medicare &amp; Medicaid Services (CMS).</p>
+                <p>Our methodology is designed around three principles: every score must be reproducible from public data, every component weight must be defensible, and every formula must be published. If you can identify a flaw in our methodology, please <a href="/dispute-process">file a dispute</a> — we will investigate within 30 days.</p>
+            </div>
+
+            <!-- DATA SOURCES -->
+            <div class="section" id="data-sources">
+                <h2 class="section-anchor">Data Sources</h2>
+                <p>All scoring data comes from CMS's Provider Data Catalog, which publishes 24 datasets across 7 facility types. These datasets are updated quarterly and are based on government-mandated reporting — facilities cannot choose what to report or how to frame it.</p>
+                <p>We use no self-reported data, no survey responses beyond CMS's own HCAHPS/HHCAHPS surveys (which are government-administered), and no data from industry groups, hospital associations, or commercial rating systems.</p>
+                <p>Additional context data — such as teaching status, ER availability, NICU, trauma center designation, and Case Mix Index — comes from the CMS Provider of Services (POS) file and the IPPS Impact File. These fields provide filtering and context but <strong>do not affect composite quality scores</strong>.</p>
+            </div>
+
+            <!-- SCORING FRAMEWORK -->
+            <div class="section" id="scoring-framework">
+                <h2 class="section-anchor">Scoring Framework</h2>
+
+                <h3 id="percentile">Percentile Ranking</h3>
+                <p>The foundation of our scoring is <strong>per-measure national percentile ranking</strong>. For each quality measure, we compute a national distribution across all facilities that report that measure. Each facility's value is then converted to a percentile (0–100) against that distribution.</p>
+                <p>This approach is critical because different measures have vastly different scales and distributions. A readmission rate of 15% and a patient satisfaction score of 72% cannot be meaningfully compared without normalization. Percentile ranking transforms every measure to a common 0–100 scale that represents the facility's standing among its peers.</p>
+                <p>Multiple measures within a component are averaged (equal weight within a component) to produce a component percentile, which is then scaled to 1.0–10.0.</p>
+
+                <div class="formula-block">
+component_score = 1.0 + (percentile / 100) × 9.0<br>
+composite = Σ (component_score × component_weight)<br>
+final_score = max(1.0, composite − enforcement_deduction)
+                </div>
+
+                <h3 id="recency">Exponential Recency Decay</h3>
+                <p>Where CMS provides multiple reporting periods for the same measure, we apply <strong>exponential recency decay</strong> to weight recent data more heavily. The decay function reduces the weight of older data exponentially, so that a facility's score reflects its current quality trajectory rather than a flat historical average.</p>
+                <p>The specific half-life depends on the measure update frequency. For quarterly measures, the half-life is approximately 6 months. For annual measures, the half-life is approximately 18 months.</p>
+
+                <h3 id="classification">Score Classification</h3>
+                <p>Composite scores are classified into five quality tiers, plus a sixth classification for facilities lacking sufficient data:</p>
+                <div class="class-legend">
+                    <span class="class-chip"><span class="class-dot" style="background:#A0D8A0"></span> Exceptional (8.0–10.0)</span>
+                    <span class="class-chip"><span class="class-dot" style="background:#B8E6A0"></span> Above Average (6.5–7.99)</span>
+                    <span class="class-chip"><span class="class-dot" style="background:#F8D08A"></span> Average (4.5–6.49)</span>
+                    <span class="class-chip"><span class="class-dot" style="background:#F0B8A0"></span> Below Average (2.5–4.49)</span>
+                    <span class="class-chip"><span class="class-dot" style="background:#E8A0A0"></span> Poor (1.0–2.49)</span>
+                    <span class="class-chip"><span class="class-dot" style="background:#BDC3C7"></span> Unrated (insufficient data)</span>
+                </div>
+            </div>
+
+            <!-- HOSPITALS -->
+            <div class="section" id="hospitals">
+                <h2 class="section-anchor"><i class="fas fa-hospital" aria-hidden="true" style="margin-right:8px;color:var(--accent)"></i> Hospitals</h2>
+                <p><strong>5,421 facilities &middot; 4,597 scored</strong></p>
+                <p>Hospital scoring uses 5 components drawn from CMS Hospital Compare datasets, plus a CMS star blend and HRRP enforcement overlay.</p>
+
+                <table class="weight-table">
+                    <thead><tr><th>Component</th><th>Weight</th><th>Source</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Mortality</strong><br>30-day mortality rates across major conditions. Uses general_info group comparison counts (CMS no longer publishes individual MORT_30 measures).</td><td><span class="weight-bar" style="width:70px"></span> 35%</td><td>complications_deaths.csv, general_info.csv</td></tr>
+                        <tr><td><strong>Safety &amp; Infections</strong><br>Healthcare-associated infections (CLABSI, CAUTI, SSI, MRSA, C. diff) using standardized infection ratios (SIR).</td><td><span class="weight-bar" style="width:50px"></span> 25%</td><td>healthcare_infections.csv</td></tr>
+                        <tr><td><strong>Readmissions</strong><br>30-day readmission rates for AMI, heart failure, pneumonia, COPD, hip/knee replacement, and CABG.</td><td><span class="weight-bar" style="width:40px"></span> 20%</td><td>readmissions_deaths.csv</td></tr>
+                        <tr><td><strong>Patient Experience</strong><br>HCAHPS survey results: communication, responsiveness, environment, discharge information, overall rating.</td><td><span class="weight-bar" style="width:30px"></span> 15%</td><td>patient_experience.csv</td></tr>
+                        <tr><td><strong>Timely &amp; Effective Care</strong><br>Process measures including ED wait times, sepsis treatment, blood clot prevention, and immunization rates.</td><td><span class="weight-bar" style="width:10px"></span> 5%</td><td>timely_effective_care.csv</td></tr>
+                    </tbody>
+                </table>
+
+                <h4>CMS Star Blend</h4>
+                <p>Where CMS publishes an overall hospital quality star rating (1–5 stars), we incorporate it as a 30% blend with our independently calculated composite. This acknowledges CMS's risk adjustment work while maintaining our independent methodology as the dominant signal. The star rating is converted to our 1.0–10.0 scale: 1 star = 2.0, 5 stars = 10.0.</p>
+
+                <h4>HRRP Enforcement</h4>
+                <p>Hospitals participating in the Hospital Readmissions Reduction Program (HRRP) with an excess readmission ratio greater than 1.0 receive an enforcement deduction proportional to the excess. This captures Medicare payment penalties that the quality components alone may not fully reflect.</p>
+            </div>
+
+            <!-- NURSING HOMES -->
+            <div class="section" id="nursing-homes">
+                <h2 class="section-anchor"><i class="fas fa-house-medical" aria-hidden="true" style="margin-right:8px;color:var(--accent)"></i> Nursing Homes</h2>
+                <p><strong>14,713 facilities &middot; 14,713 scored</strong></p>
+                <p>Nursing home scoring has the most complex enforcement overlay due to the breadth of regulatory actions CMS takes against underperforming skilled nursing facilities.</p>
+
+                <table class="weight-table">
+                    <thead><tr><th>Component</th><th>Weight</th><th>Source</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Health Inspections</strong><br>Deficiency counts and severity from state survey inspections. Higher deficiency counts and more severe findings reduce the score.</td><td><span class="weight-bar" style="width:80px"></span> 40%</td><td>health_inspections.csv</td></tr>
+                        <tr><td><strong>Quality Measures</strong><br>Long-stay and short-stay quality measures: falls, pressure ulcers, UTI rates, physical restraint use, antipsychotic medication use.</td><td><span class="weight-bar" style="width:50px"></span> 25%</td><td>quality_measures.csv</td></tr>
+                        <tr><td><strong>Staffing</strong><br>Adjusted nursing hours per resident day. Includes RN, LPN, and CNA staffing ratios, adjusted for case mix.</td><td><span class="weight-bar" style="width:30px"></span> 15%</td><td>staffing.csv</td></tr>
+                        <tr><td><strong>Penalties &amp; Enforcement</strong><br>Civil monetary penalties (fines) and payment denials imposed by CMS.</td><td><span class="weight-bar" style="width:30px"></span> 15%</td><td>penalties.csv</td></tr>
+                        <tr><td><strong>Complaint Surveys</strong><br>Deficiencies found during complaint-triggered surveys, indicating issues reported by residents, families, or staff.</td><td><span class="weight-bar" style="width:10px"></span> 5%</td><td>health_inspections.csv (complaint type)</td></tr>
+                    </tbody>
+                </table>
+
+                <h4>Enforcement Overlay</h4>
+                <p>Nursing home enforcement uses a <strong>proportional deduction</strong> model rather than a flat deduction. This prevents floor clustering — when facilities with already-low composites receive flat penalties that push them all to the minimum score, making it impossible to distinguish degrees of poor quality.</p>
+                <div class="formula-block">
+effective_deduction = raw_deduction × (composite − 1.0) / 9.0
+                </div>
+                <p>Enforcement actions include: civil monetary penalties (fines) from individual penalty rows only (no double-counting), payment denials, abuse citations, and Special Focus Facility (SFF) designations. Deficiency severity feeds the inspection component, not the enforcement overlay — this prevents double-counting between quality measurement and regulatory action.</p>
+            </div>
+
+            <!-- DIALYSIS -->
+            <div class="section" id="dialysis">
+                <h2 class="section-anchor"><i class="fas fa-droplet" aria-hidden="true" style="margin-right:8px;color:var(--accent)"></i> Dialysis Centers</h2>
+                <p><strong>7,557 facilities &middot; 7,557 scored</strong></p>
+
+                <table class="weight-table">
+                    <thead><tr><th>Component</th><th>Weight</th><th>Source</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Clinical Outcomes</strong><br>Standardized mortality ratio (SMR), standardized hospitalization ratio (SHR), and standardized readmission ratio (SRR). These use confirmed standardized ratios, not raw rates.</td><td><span class="weight-bar" style="width:60px"></span> 30%</td><td>facility.csv (DFC)</td></tr>
+                        <tr><td><strong>Adequacy &amp; Safety</strong><br>Dialysis adequacy (Kt/V), vascular access measures (fistula rate, catheter rate), hypercalcemia, and phosphorus management.</td><td><span class="weight-bar" style="width:50px"></span> 25%</td><td>facility.csv (DFC)</td></tr>
+                        <tr><td><strong>Patient Survival</strong><br>Long-term patient survival rates and transfusion rates. Percentile-ranked against national distributions.</td><td><span class="weight-bar" style="width:50px"></span> 25%</td><td>facility.csv (DFC)</td></tr>
+                        <tr><td><strong>Infection Control</strong><br>Bloodstream infection rates (BSI) and healthcare-associated infections specific to dialysis facilities.</td><td><span class="weight-bar" style="width:30px"></span> 15%</td><td>facility.csv (DFC)</td></tr>
+                        <tr><td><strong>Patient Experience</strong><br>ICH CAHPS survey results: communication, care quality, providing information.</td><td><span class="weight-bar" style="width:10px"></span> 5%</td><td>facility.csv (DFC)</td></tr>
+                    </tbody>
+                </table>
+
+                <h4>CMS Star Blend</h4>
+                <p>Where CMS publishes a Dialysis Facility Compare star rating, it is incorporated as a 10% blend. Dialysis star ratings receive a lower blend weight than hospitals because the DFC star methodology has fewer risk-adjustment dimensions.</p>
+
+                <div class="callout callout-info">
+                    <div class="callout-title">Important: SIR vs. Raw Rates</div>
+                    <p>Dialysis scoring uses <strong>percentile ranking on actual numeric rates</strong> as the primary scoring path. The <code>sir_to_score()</code> function is applied only to confirmed standardized ratios (SIR, SMR, SHR, SRR) — never to raw rates. This distinction is critical because raw rates and standardized ratios have fundamentally different distributions and interpretations.</p>
+                </div>
+            </div>
+
+            <!-- HOME HEALTH -->
+            <div class="section" id="home-health">
+                <h2 class="section-anchor"><i class="fas fa-house-chimney-medical" aria-hidden="true" style="margin-right:8px;color:var(--accent)"></i> Home Health Agencies</h2>
+                <p><strong>12,251 facilities &middot; 8,885 scored</strong></p>
+
+                <table class="weight-table">
+                    <thead><tr><th>Component</th><th>Weight</th><th>Source</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Quality of Care</strong><br>Timely initiation of care, drug education, fall risk assessment, depression screening, and flu/pneumonia vaccination rates.</td><td><span class="weight-bar" style="width:70px"></span> 35%</td><td>quality_measures.csv (HHC)</td></tr>
+                        <tr><td><strong>Patient Outcomes</strong><br>Improvement in ambulation, bed transferring, bathing, pain management, and breathing. Also includes acute care hospitalization rate and ER use rate.</td><td><span class="weight-bar" style="width:60px"></span> 30%</td><td>quality_measures.csv (HHC)</td></tr>
+                        <tr><td><strong>Patient Experience</strong><br>HHCAHPS survey results: professional care, communication, overall rating, willingness to recommend.</td><td><span class="weight-bar" style="width:30px"></span> 15%</td><td>patient_experience.csv (HHC)</td></tr>
+                        <tr><td><strong>Process Measures</strong><br>How consistently the agency follows clinical best practices in assessment and treatment planning.</td><td><span class="weight-bar" style="width:30px"></span> 15%</td><td>quality_measures.csv (HHC)</td></tr>
+                        <tr><td><strong>Potentially Avoidable Events</strong><br>Rates of unplanned hospitalizations and ER visits that could have been prevented with better home-based care.</td><td><span class="weight-bar" style="width:10px"></span> 5%</td><td>quality_measures.csv (HHC)</td></tr>
+                    </tbody>
+                </table>
+                <p>All 5 home health components use actual CMS measures — no synthetic or imputed values. Home health agencies that report on fewer than the minimum number of measures are classified as Unrated.</p>
+            </div>
+
+            <!-- HOSPICE -->
+            <div class="section" id="hospice">
+                <h2 class="section-anchor"><i class="fas fa-hand-holding-heart" aria-hidden="true" style="margin-right:8px;color:var(--accent)"></i> Hospice</h2>
+                <p><strong>6,970 facilities &middot; 6,321 scored</strong></p>
+
+                <table class="weight-table">
+                    <thead><tr><th>Component</th><th>Weight</th><th>Source</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Quality of Care</strong><br>Pain assessment and management, dyspnea screening, treatment preferences documented, beliefs and values addressed.</td><td><span class="weight-bar" style="width:60px"></span> 30%</td><td>quality_measures.csv (hospice)</td></tr>
+                        <tr><td><strong>Patient &amp; Caregiver Experience</strong><br>CAHPS Hospice Survey: communication, timeliness, emotional and spiritual support, symptom management, overall rating.</td><td><span class="weight-bar" style="width:50px"></span> 25%</td><td>patient_experience.csv (hospice)</td></tr>
+                        <tr><td><strong>Care Patterns</strong><br>Hospice visits in last days of life, nurse visit frequency, proportion of care delivered in the home vs. inpatient.</td><td><span class="weight-bar" style="width:50px"></span> 25%</td><td>quality_measures.csv (hospice)</td></tr>
+                        <tr><td><strong>Appropriateness</strong><br>Median length of stay, very short stays (under 7 days), very long stays, live discharge rate.</td><td><span class="weight-bar" style="width:30px"></span> 15%</td><td>general_info.csv (hospice)</td></tr>
+                        <tr><td><strong>Staffing &amp; Services</strong><br>Breadth of services provided: social work, chaplain, bereavement, volunteer hours per patient.</td><td><span class="weight-bar" style="width:10px"></span> 5%</td><td>general_info.csv (hospice)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- IRF -->
+            <div class="section" id="irf">
+                <h2 class="section-anchor"><i class="fas fa-person-walking" aria-hidden="true" style="margin-right:8px;color:var(--accent)"></i> Inpatient Rehabilitation Facilities (IRF)</h2>
+                <p><strong>1,221 facilities &middot; 1,149 scored</strong></p>
+
+                <table class="weight-table">
+                    <thead><tr><th>Component</th><th>Weight</th><th>Source</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Functional Outcomes</strong><br>Change in self-care and mobility scores from admission to discharge, as measured by the IRF-PAI assessment. Uses continuous numeric values (not text performance categories).</td><td><span class="weight-bar" style="width:80px"></span> 40%</td><td>quality_measures.csv (IRF)</td></tr>
+                        <tr><td><strong>Safety &amp; Infections</strong><br>Infection rates (CAUTI, CLABSI), falls with major injury, and pressure ulcer incidence in the rehabilitation setting.</td><td><span class="weight-bar" style="width:50px"></span> 25%</td><td>quality_measures.csv (IRF)</td></tr>
+                        <tr><td><strong>Community Discharge</strong><br>Rate of patients discharged back to the community (home or home with services) vs. to another institution.</td><td><span class="weight-bar" style="width:40px"></span> 20%</td><td>quality_measures.csv (IRF)</td></tr>
+                        <tr><td><strong>Process &amp; Timeliness</strong><br>Medicare spending per beneficiary, potentially preventable readmissions within 30 days, and efficiency measures.</td><td><span class="weight-bar" style="width:30px"></span> 15%</td><td>quality_measures.csv (IRF)</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="callout callout-info">
+                    <div class="callout-title">IRF measure codes</div>
+                    <p>IRF measure codes were verified against actual CMS data (Session B). The original dictionaries had incorrect codes. All 69 unique measure code prefix+suffix combinations were inventoried and validated against the CMS IRF quality reporting data.</p>
+                </div>
+            </div>
+
+            <!-- LTCH -->
+            <div class="section" id="ltch">
+                <h2 class="section-anchor"><i class="fas fa-bed-pulse" aria-hidden="true" style="margin-right:8px;color:var(--accent)"></i> Long-Term Care Hospitals (LTCH)</h2>
+                <p><strong>319 facilities &middot; 316 scored</strong></p>
+
+                <table class="weight-table">
+                    <thead><tr><th>Component</th><th>Weight</th><th>Source</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Functional Outcomes</strong><br>Change in mobility and self-care from admission to discharge, using LTCH CARE Data Set assessment values.</td><td><span class="weight-bar" style="width:60px"></span> 30%</td><td>quality_measures.csv (LTCH)</td></tr>
+                        <tr><td><strong>Safety &amp; Infections</strong><br>CLABSI, CAUTI, MRSA, C. diff rates in the long-term acute care setting. Standardized infection ratios where available.</td><td><span class="weight-bar" style="width:60px"></span> 30%</td><td>quality_measures.csv (LTCH)</td></tr>
+                        <tr><td><strong>Discharge Outcomes</strong><br>Discharge to community rate, and potentially preventable readmission rate within 30 days of LTCH discharge.</td><td><span class="weight-bar" style="width:50px"></span> 25%</td><td>quality_measures.csv (LTCH)</td></tr>
+                        <tr><td><strong>Ventilator &amp; Pressure Injuries</strong><br>Ventilator liberation rates and new or worsened pressure ulcer/injury rates, critical indicators for LTCH populations.</td><td><span class="weight-bar" style="width:30px"></span> 15%</td><td>quality_measures.csv (LTCH)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- ENFORCEMENT -->
+            <div class="section" id="enforcement">
+                <h2 class="section-anchor">Enforcement Overlay</h2>
+                <p>Enforcement is an independent layer applied <strong>on top of</strong> composite quality scores. Quality data feeds components; enforcement captures regulatory actions. No measure feeds both a component and the enforcement overlay — this prevents double-counting.</p>
+                <p>Enforcement actions currently applied:</p>
+                <ul>
+                    <li><strong>Hospitals:</strong> Hospital Readmissions Reduction Program (HRRP) — excess readmission ratio &gt; 1.0 triggers a proportional deduction derived from the readmissions component data.</li>
+                    <li><strong>Nursing homes:</strong> Civil monetary penalties (fines), payment denials, abuse citations, and Special Focus Facility (SFF) designations. Uses proportional deduction formula to prevent floor clustering.</li>
+                    <li><strong>Dialysis, home health, hospice, IRF, LTCH:</strong> Enforcement data is displayed when available but does not currently affect composite scores. As CMS enforcement data for these types matures, enforcement overlays will be added with appropriate methodology updates.</li>
+                </ul>
+            </div>
+
+            <!-- CONTEXT FIELDS -->
+            <div class="section" id="context-fields">
+                <h2 class="section-anchor">Context-Only Fields</h2>
+                <p>Several data fields appear on facility detail pages but <strong>do not affect composite quality scores</strong>. These fields provide filtering and interpretive context:</p>
+                <ul>
+                    <li><strong>Teaching status</strong> — from CMS POS file. Teaching hospitals may have different outcome profiles due to case complexity, but we do not adjust scores for teaching status.</li>
+                    <li><strong>Emergency Room availability</strong> — from POS file.</li>
+                    <li><strong>NICU availability</strong> — from POS file.</li>
+                    <li><strong>Trauma center designation</strong> — from POS file.</li>
+                    <li><strong>Cardiac catheterization lab</strong> — from POS file.</li>
+                    <li><strong>Case Mix Index (CMI)</strong> — from IPPS Impact File. Higher CMI indicates more complex cases, which correlates with but does not cause lower quality.</li>
+                    <li><strong>Bed count</strong> — from POS file.</li>
+                    <li><strong>Ownership type</strong> — from POS file (government, nonprofit, proprietary).</li>
+                </ul>
+                <p>The decision to keep these fields context-only is deliberate: teaching hospitals may have higher mortality because they take harder cases, but that is a reason for interpretation, not an adjustment that would mask real quality differences.</p>
+            </div>
+
+            <!-- UNRATED -->
+            <div class="section" id="unrated">
+                <h2 class="section-anchor">Unrated Facilities</h2>
+                <p>Facilities with insufficient data for a composite score receive a score of <code>None</code> (not 0.0) and are classified as "Unrated." This prevents false "worst" rankings for facilities that simply lack data.</p>
+                <p>Approximately 4,914 facilities (10% of total) are currently Unrated. They appear on the map as gray markers. See our <a href="/medical-disclaimer">medical disclaimer</a> for more information on what Unrated means for patients.</p>
+            </div>
+
+            <!-- VALIDATION -->
+            <div class="section" id="validation">
+                <h2 class="section-anchor">Validation</h2>
+                <p>Our scoring engine is validated against a suite of 126 automated tests across 9 categories: score range validity, component weight verification, distribution analysis, enforcement logic, facility type coverage, geographic distribution, edge cases, data completeness, and cross-type consistency.</p>
+                <p>Current validation status: <strong>123 of 126 tests passing</strong> (98%). The 3 remaining failures are: 4 facilities with duplicate CMS Certification Numbers, IRF standard deviation of 0.97 (below the 1.0 target), and Georgia nursing home standard deviation of 1.49 (localized distribution concern).</p>
+                <p>Validation is run after every scoring engine update and before every database seed. Results are published in the validation report included with each version release.</p>
+            </div>
+
+            <!-- VERSIONING -->
+            <div class="section" id="versioning">
+                <h2 class="section-anchor">Versioning &amp; Change Log</h2>
+                <p>Our scoring engine is versioned. The current version is <strong>v1.9</strong>. Every change to component weights, scoring formulas, enforcement logic, or data sources increments the version number and is documented here.</p>
+                <ul>
+                    <li><strong>v1.9</strong> (April 2026) — Added POS file integration for context fields. IPPS Case Mix Index. No scoring formula changes.</li>
+                    <li><strong>v1.8</strong> (March 2026) — Fixed nursing home enforcement floor clustering (proportional deduction). Rebuilt all 5 home health components from actual CMS measures.</li>
+                    <li><strong>v1.7</strong> (March 2026) — Fixed dialysis score compression. Switched to percentile ranking on actual numeric rates.</li>
+                    <li><strong>v1.6</strong> (March 2026) — Corrected IRF and LTCH measure code dictionaries against actual CMS data. Added per-measure national distributions.</li>
+                    <li><strong>v1.5</strong> (March 2026) — Fixed hospital mortality scoring to use general_info group comparison counts (CMS removed individual MORT_30 measures).</li>
+                </ul>
+                <p>All previous versions of the scoring engine are retained for reproducibility. If you need access to a prior version for research purposes, contact <strong>hello@forthepatient.org</strong>.</p>
+            </div>
+        </main>
+    </div>
+
+    <footer class="page-footer">
+        <div class="footer-links">
+            <a href="/methodology">Methodology</a>
+            <a href="/medical-disclaimer">Disclaimer</a>
+            <a href="/dispute-process">Dispute Process</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+            <a href="/about">About</a>
+        </div>
+        <div class="footer-copy">&copy; 2026 ForThePatient.org. All rights reserved.</div>
+    </footer>
+
+    <script>
+    let currentTheme='light';
+    (function(){try{const s=localStorage.getItem('theme');if(s==='dark'){currentTheme='dark';document.documentElement.setAttribute('data-theme','dark');const b=document.getElementById('theme-toggle-btn');b.classList.add('active');b.setAttribute('aria-checked','true');b.querySelector('.toggle-slider i').className='fas fa-moon';document.querySelector('meta[name="theme-color"]').content='#1A1F36'}}catch(e){}})();
+    function toggleTheme(){currentTheme=currentTheme==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',currentTheme);try{localStorage.setItem('theme',currentTheme)}catch(e){}const btn=document.getElementById('theme-toggle-btn');btn.classList.toggle('active',currentTheme==='dark');btn.setAttribute('aria-checked',currentTheme==='dark');btn.querySelector('.toggle-slider i').className=currentTheme==='dark'?'fas fa-moon':'fas fa-sun';document.querySelector('meta[name="theme-color"]').content=currentTheme==='dark'?'#1A1F36':'#FDF8F0'}
+    const tocLinks=document.querySelectorAll('.toc-link');
+    const observer=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){const id=e.target.id||e.target.closest('.section')?.id;tocLinks.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+id))}})},{rootMargin:'-80px 0px -60% 0px'});
+    document.querySelectorAll('.section[id]').forEach(s=>observer.observe(s));
+    </script>
+</body>
+</html>
