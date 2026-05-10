@@ -1,7 +1,22 @@
 <!--
-  ForThePatient.org v4.1 (Session K1 — May 2026)
-  Mobile audit & fix pass.
-  Changelog vs v4.0:
+  ForThePatient.org v4.2 (Session K2 — May 2026)
+  Map default-view & state-scope pass (mobile + desktop).
+  Changelog vs v4.1:
+    - Initial load defaults to a state-bubble view, not facility view:
+        * with geolocation: centered on user at zoom 6 (their state + neighbors)
+        * without geolocation: continental US at zoom 4
+    - Default facility-type selection narrowed to Hospitals only (others
+      remain available, just unselected).
+    - Specialty filter chips (ER/NICU/Trauma/Teaching/Cardiac Cath) removed
+      from the filter bar — that information is already on each facility's
+      detail card, and the chips were eating mobile real-estate.
+    - Stats inline ("X in view / avg Y") now visible on mobile, with the
+      static labels hidden on narrow screens to keep the row compact.
+    - State-scoped facility view: clicking a state bubble now constrains the
+      facility-mode fetch to that state only. Bleed-over from neighboring
+      states is filtered out client-side. A dismissible state-filter badge
+      shows in the filter bar; zooming back out to bubble view clears it.
+  v4.1 changes (Session K1) carried forward:
     - Inline About page removed (now /about static page).
     - Header Map/About converted to <a> anchors; logo wrapped in home anchor.
     - Footer-bar visible on mobile portrait (hidden in landscape).
@@ -77,8 +92,15 @@
         .f-chip.spec.active{border-style:solid}
         .f-chip.disabled{opacity:.35;cursor:default}
         .f-chip i{font-size:.68rem}
-        .stats-inline{display:flex;gap:12px;align-items:center;flex-shrink:0;margin-left:auto;font-size:.72rem;color:var(--text-secondary);white-space:nowrap}
+        .stats-inline{display:flex;gap:10px;align-items:center;flex-shrink:0;margin-left:auto;font-size:.72rem;color:var(--text-secondary);white-space:nowrap}
         .stats-inline strong{font-weight:700;color:var(--text-primary);font-variant-numeric:tabular-nums}
+        .stats-inline .stat-item{display:inline-flex;align-items:center;gap:3px}
+        .stats-inline .stat-item + .stat-item::before{content:"·";opacity:.5;margin-right:4px;font-weight:400}
+
+        .state-filter-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 8px 5px 10px;background:var(--accent);color:#fff;border:none;border-radius:14px;font-size:.72rem;font-weight:600;cursor:pointer;flex-shrink:0;font-family:inherit;line-height:1;transition:opacity .15s,background .15s;min-height:30px}
+        .state-filter-badge:hover{opacity:.9}
+        .state-filter-badge .state-filter-x{font-size:.7rem;opacity:.85;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,255,255,.18)}
+        .state-filter-badge[hidden]{display:none!important}
 
         .info-panel{position:absolute;top:68px;right:12px;width:var(--detail-w);max-height:calc(100dvh - var(--header-h) - var(--safe-top) - 100px);overflow-y:auto;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);z-index:450;display:none;transition:all .3s}
         .info-panel.active{display:block}
@@ -195,18 +217,21 @@
 
         @media(max-width:768px){
             .filter-bar{top:8px;left:calc(8px + var(--safe-left));right:calc(8px + var(--safe-right));padding:6px 8px;gap:6px}
-            .search-compact input{width:140px;padding:8px 10px 8px 28px;font-size:16px;min-height:40px}
-            .search-compact input:focus{width:180px}
+            .search-compact input{width:120px;padding:8px 10px 8px 28px;font-size:16px;min-height:40px}
+            .search-compact input:focus{width:160px}
             .search-compact .search-icon{font-size:.78rem}
             .info-panel{display:none!important}
             .bottom-sheet{display:flex}
-            .stats-inline{display:none}
+            .stats-inline{font-size:.64rem;gap:5px;margin-left:4px}
+            .stats-inline .stats-label{display:none}
+            .stats-inline .stat-item + .stat-item::before{margin-right:2px}
             .logo-sub{display:none}
             .nav-btn{padding:8px 10px;min-height:36px;font-size:.82rem}
             .f-chip{padding:7px 12px;min-height:36px;font-size:.78rem}
             .detail-action-btn{min-width:40px;min-height:40px;font-size:.95rem}
             .detail-action-btn[data-pin]{display:none!important}
             .chip-scroll-wrap{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 12px,#000 calc(100% - 18px),transparent 100%);mask-image:linear-gradient(to right,transparent 0,#000 12px,#000 calc(100% - 18px),transparent 100%)}
+            .state-filter-badge{font-size:.66rem;padding:4px 6px 4px 8px;min-height:28px}
             .footer-bar{bottom:calc(10px + var(--safe-bottom));padding:5px 12px;font-size:.64rem;gap:10px;left:calc(50%);right:auto;max-width:calc(100% - 16px)}
             .facility-info{padding:18px;padding-top:14px;padding-left:max(16px,calc(16px + var(--safe-left)));padding-right:max(16px,calc(16px + var(--safe-right)))}
             .facility-name{font-size:1.05rem}
@@ -221,9 +246,10 @@
             .nav-btn{padding:6px 8px;font-size:.76rem;min-height:34px}
             .logo{font-size:1rem}
             .header-right{gap:4px}
-            .search-compact input{width:118px}
-            .search-compact input:focus{width:150px}
+            .search-compact input{width:100px}
+            .search-compact input:focus{width:130px}
             .filter-bar{padding:5px 6px;gap:5px}
+            .stats-inline{font-size:.6rem;gap:4px;margin-left:2px}
             .toggle-switch{width:40px;min-width:40px;height:24px}
             .toggle-switch .toggle-slider{width:20px;height:20px}
             .toggle-switch.active .toggle-slider{transform:translateX(16px)}
@@ -262,8 +288,9 @@
         <div class="filter-bar" id="filter-bar" role="search" aria-label="Filters">
             <div class="search-compact"><i class="fas fa-search search-icon" aria-hidden="true"></i><input type="text" id="name-search" placeholder="Search facility…" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="name-results" aria-autocomplete="list" aria-label="Search facility by name"><div class="name-results" id="name-results" role="listbox"></div></div>
             <div class="filter-divider" aria-hidden="true"></div>
+            <button class="state-filter-badge" id="state-filter-badge" type="button" hidden aria-label="Clear state filter"><span id="state-filter-name"></span><i class="fas fa-times state-filter-x" aria-hidden="true"></i></button>
             <div class="chip-scroll-wrap"><div class="chip-scroll" id="chip-scroll" role="group" aria-label="Filters"></div></div>
-            <div class="stats-inline" aria-live="polite"><span><strong id="total-count">0</strong> in view</span><span>avg <strong id="avg-score">—</strong></span></div>
+            <div class="stats-inline" aria-live="polite"><span class="stat-item"><strong id="total-count">0</strong><span class="stats-label">&nbsp;in view</span></span><span class="stat-item"><span class="stats-label">avg&nbsp;</span><strong id="avg-score">—</strong></span></div>
         </div>
         <aside class="info-panel" id="info-panel" role="dialog" aria-modal="false" aria-label="Facility details"><div class="resize-handle" id="resize-handle" aria-hidden="true"></div><div id="facility-info-content"><div class="empty-state"><i class="fas fa-map-marker-alt" aria-hidden="true"></i><h4>Select a Facility</h4><p>Click any point on the map to view detailed quality scores</p></div></div></aside>
         <div class="footer-bar" aria-label="Legal"><a href="/about">About</a><a href="/methodology">Methodology</a><a href="/medical-disclaimer">Disclaimer</a><a href="/dispute-process">Dispute</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>
@@ -298,11 +325,12 @@
 
     let map,clusterLayer,stateBubbleLayer;
     let currentTheme='light',currentFacilities=[],openFacilityId=null;
-    let activeTypes=new Set(FACILITY_TYPES.map(t=>t.value));
+    let activeTypes=new Set(['hospital']);
     let activeSpecialties={teaching:false,nicu:false,cath:false,trauma:false,er:false};
     let isMobile=false,isOnline=navigator.onLine,isTouching=false,pendingFetch=false,detailPanelPinned=false,inflightController=null;
     let stateSummaryCache=null,currentViewMode='state';
     let sheetState='closed';
+    let filteredState=null;
 
     function classColor(c){return CLASS_COLORS[c]||CLASS_COLORS.Unrated}
     function classBadgeClass(c){return(!c||c==='Unrated')?'unrated':''}
@@ -316,13 +344,13 @@
 
     function getViewportRadiusMiles(){if(!map)return 25;const b=map.getBounds(),d=map.distance(b.getNorthEast(),b.getSouthWest());const h=(d/1609.344)/2;return Math.max(2,Math.min(2000,Math.ceil(h)))}
 
-    function getUrlState(){const p=new URLSearchParams(location.search);return{lat:parseFloat(p.get('lat'))||null,lng:parseFloat(p.get('lng'))||null,z:parseInt(p.get('z'))||null,types:p.get('types')?p.get('types').split(','):null,specialties:p.get('sp')?p.get('sp').split(','):[],facilityId:p.get('fid')||null,theme:p.get('theme')||null}}
-    function pushUrlState(replace){if(!map)return;const c=map.getCenter(),p=new URLSearchParams;p.set('lat',c.lat.toFixed(4));p.set('lng',c.lng.toFixed(4));p.set('z',map.getZoom());const t=Array.from(activeTypes);if(t.length<FACILITY_TYPES.length)p.set('types',t.join(','));const sp=Object.entries(activeSpecialties).filter(([,v])=>v).map(([k])=>k);if(sp.length)p.set('sp',sp.join(','));if(openFacilityId)p.set('fid',openFacilityId);if(currentTheme==='dark')p.set('theme','dark');const url=location.pathname+'?'+p.toString();if(replace)history.replaceState(null,'',url);else history.pushState(null,'',url)}
+    function getUrlState(){const p=new URLSearchParams(location.search);return{lat:parseFloat(p.get('lat'))||null,lng:parseFloat(p.get('lng'))||null,z:parseInt(p.get('z'))||null,types:p.get('types')?p.get('types').split(','):null,state:p.get('state')||null,facilityId:p.get('fid')||null,theme:p.get('theme')||null}}
+    function pushUrlState(replace){if(!map)return;const c=map.getCenter(),p=new URLSearchParams;p.set('lat',c.lat.toFixed(4));p.set('lng',c.lng.toFixed(4));p.set('z',map.getZoom());const t=Array.from(activeTypes).sort();const allTypes=FACILITY_TYPES.map(x=>x.value).sort();if(t.join(',')!==allTypes.join(','))p.set('types',t.join(','));if(filteredState)p.set('state',filteredState);if(openFacilityId)p.set('fid',openFacilityId);if(currentTheme==='dark')p.set('theme','dark');const url=location.pathname+'?'+p.toString();if(replace)history.replaceState(null,'',url);else history.pushState(null,'',url)}
 
     function initMap(){
         const u=getUrlState();
         const center=(u.lat&&u.lng)?[u.lat,u.lng]:[39.5,-98.0];
-        const zoom=u.z||5;
+        const zoom=u.z||4;
         map=L.map('map',{center,zoom,zoomControl:false,preferCanvas:true});
         const tileUrl=currentTheme==='dark'?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png':'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
         L.tileLayer(tileUrl,{attribution:'&copy; CARTO &middot; CMS public data',subdomains:'abcd',maxZoom:20}).addTo(map);
@@ -333,12 +361,13 @@
         map.getContainer().addEventListener('touchend',()=>{isTouching=false;if(pendingFetch){pendingFetch=false;onViewChange()}},{passive:true});
         const dv=debounce(()=>{if(isTouching){pendingFetch=true;return}onViewChange();pushUrlState(true)},300);
         map.on('moveend',dv);map.on('zoomend',dv);
-        buildFilterChips();wireNameSearch();wireResizeHandle();
+        buildFilterChips();wireNameSearch();wireResizeHandle();wireStateFilterBadge();
         if(u.types)activeTypes=new Set(u.types.filter(t=>TYPE_LABEL[t]));
-        if(u.specialties.length)u.specialties.forEach(k=>{if(k in activeSpecialties)activeSpecialties[k]=true});
+        if(u.state&&STATE_BY_ABBR[u.state])filteredState=u.state;
         syncChips();
+        updateStateFilterIndicator();
         loadStateSummary().then(()=>{
-            if(!u.lat&&navigator.geolocation){navigator.geolocation.getCurrentPosition(pos=>{map.setView([pos.coords.latitude,pos.coords.longitude],11)},()=>onViewChange(),{timeout:4000})}else{onViewChange()}
+            if(!u.lat&&navigator.geolocation){navigator.geolocation.getCurrentPosition(pos=>{map.setView([pos.coords.latitude,pos.coords.longitude],6)},()=>onViewChange(),{timeout:4000})}else{onViewChange()}
         });
         setTimeout(()=>{if(!currentFacilities.length&&!stateSummaryCache)onViewChange()},2000);
         if(u.facilityId)setTimeout(()=>openFacilityDetail(u.facilityId),500);
@@ -348,7 +377,20 @@
 
     async function loadStateSummary(){try{const{data,error}=await sb.from('state_summary').select('*');if(error)throw error;stateSummaryCache=data||[];dlog('state_summary:',stateSummaryCache.length,'rows')}catch(e){derr('state_summary failed:',e);stateSummaryCache=[]}}
 
-    function onViewChange(){if(!map)return;const z=map.getZoom();if(z<STATE_ZOOM){if(currentViewMode!=='state'){clusterLayer.clearLayers();currentFacilities=[]}currentViewMode='state';renderStateBubbles()}else{if(currentViewMode!=='facility')stateBubbleLayer.clearLayers();currentViewMode='facility';fetchInView()}}
+    function onViewChange(){
+        if(!map)return;
+        const z=map.getZoom();
+        if(z<STATE_ZOOM){
+            if(currentViewMode!=='state'){clusterLayer.clearLayers();currentFacilities=[]}
+            currentViewMode='state';
+            if(filteredState){filteredState=null;updateStateFilterIndicator()}
+            renderStateBubbles();
+        }else{
+            if(currentViewMode!=='facility')stateBubbleLayer.clearLayers();
+            currentViewMode='facility';
+            fetchInView();
+        }
+    }
 
     function renderStateBubbles(){
         stateBubbleLayer.clearLayers();
@@ -370,7 +412,7 @@
             const cfs=Math.max(8,fs-3);
             const icon=L.divIcon({className:'',html:'<div class="state-bubble" style="width:'+size+'px;height:'+size+'px;background:'+bg+'"><span class="st-abbr" style="font-size:'+fs+'px;color:#2C3E50">'+st+'</span><span class="st-count" style="font-size:'+cfs+'px;color:#2C3E50">'+d.count.toLocaleString()+'</span></div>',iconSize:[size,size],iconAnchor:[size/2,size/2]});
             const m=L.marker([si.lat,si.lng],{icon});
-            m.on('click',()=>{map.setView([si.lat,si.lng],STATE_ZOOM)});
+            m.on('click',()=>{filteredState=st;updateStateFilterIndicator();map.setView([si.lat,si.lng],STATE_ZOOM)});
             const scoreStr=avg!=null?avg.toFixed(1):'—';
             m.bindTooltip('<strong>'+si.n+'</strong><br>'+d.count.toLocaleString()+' facilities · avg '+scoreStr,{direction:'top',offset:[0,-size/2-4]});
             stateBubbleLayer.addLayer(m);
@@ -393,30 +435,68 @@
     function buildFilterChips(){
         const sc=document.getElementById('chip-scroll');sc.innerHTML='';
         FACILITY_TYPES.forEach(t=>{const c=document.createElement('button');c.className='f-chip'+(activeTypes.has(t.value)?' active':'');c.dataset.type=t.value;c.setAttribute('role','switch');c.setAttribute('aria-checked',activeTypes.has(t.value));c.setAttribute('aria-label',t.label);c.type='button';c.innerHTML='<i class="fas '+t.icon+'" aria-hidden="true"></i> '+t.label;c.addEventListener('click',()=>{if(activeTypes.has(t.value))activeTypes.delete(t.value);else activeTypes.add(t.value);haptic(10);syncChips();onViewChange()});sc.appendChild(c)});
-        const dv=document.createElement('div');dv.className='filter-divider';dv.id='spec-divider';dv.setAttribute('aria-hidden','true');sc.appendChild(dv);
-        SPECIALTIES.forEach(sp=>{const c=document.createElement('button');c.className='f-chip spec'+(activeSpecialties[sp.key]?' active':'');c.dataset.spec=sp.key;c.setAttribute('role','switch');c.setAttribute('aria-checked',activeSpecialties[sp.key]);c.setAttribute('aria-label',sp.label);c.type='button';c.innerHTML='<i class="fas '+sp.icon+'" aria-hidden="true"></i> '+sp.label;c.addEventListener('click',()=>{if(c.classList.contains('disabled'))return;activeSpecialties[sp.key]=!activeSpecialties[sp.key];haptic(10);syncChips();onViewChange()});sc.appendChild(c)});
         syncChips();
     }
 
     function syncChips(){
-        const hasH=activeTypes.has('hospital');
         document.querySelectorAll('.f-chip[data-type]').forEach(c=>{const a=activeTypes.has(c.dataset.type);c.classList.toggle('active',a);c.setAttribute('aria-checked',a)});
-        document.querySelectorAll('.f-chip[data-spec]').forEach(c=>{const a=activeSpecialties[c.dataset.spec];c.classList.toggle('active',a);c.classList.toggle('disabled',!hasH);c.setAttribute('aria-checked',a);if(!hasH)c.setAttribute('data-tooltip','Hospitals only');else c.removeAttribute('data-tooltip')});
-        const sd=document.getElementById('spec-divider');if(sd)sd.style.display=hasH?'':'none';
         pushUrlState(true);
+    }
+
+    function updateStateFilterIndicator(){
+        const badge=document.getElementById('state-filter-badge');
+        const nameEl=document.getElementById('state-filter-name');
+        if(!badge||!nameEl)return;
+        if(filteredState&&STATE_BY_ABBR[filteredState]){
+            nameEl.textContent=STATE_BY_ABBR[filteredState].n;
+            badge.hidden=false;
+        }else{
+            badge.hidden=true;
+            nameEl.textContent='';
+        }
+    }
+
+    function wireStateFilterBadge(){
+        const badge=document.getElementById('state-filter-badge');
+        if(!badge||badge._wired)return;
+        badge._wired=true;
+        badge.addEventListener('click',()=>{
+            if(!filteredState)return;
+            filteredState=null;
+            updateStateFilterIndicator();
+            haptic(10);
+            // Re-fetch in the current viewport without the state constraint
+            if(currentViewMode==='facility'){fetchInView()}
+            pushUrlState(true);
+        });
     }
 
     async function fetchInView(){
         if(!map||!isOnline)return;
-        const c=map.getCenter(),radius=getViewportRadiusMiles(),types=Array.from(activeTypes);
-        dlog('fetchInView: center=('+c.lat.toFixed(4)+','+c.lng.toFixed(4)+'), radius='+radius+'mi, types=['+types.join(',')+'], zoom='+map.getZoom());
+        const c=map.getCenter();
+        const types=Array.from(activeTypes);
+        // When state-filtered, anchor the radius search on the state centroid
+        // (the map view might be off-center) and use a generous radius so we
+        // capture facilities anywhere in that state. Out-of-state rows are
+        // dropped client-side below.
+        let centerLat=c.lat,centerLng=c.lng,radius=getViewportRadiusMiles();
+        if(filteredState&&STATE_BY_ABBR[filteredState]){
+            const si=STATE_BY_ABBR[filteredState];
+            centerLat=si.lat;centerLng=si.lng;
+            radius=Math.max(radius,500);
+        }
+        dlog('fetchInView: center=('+centerLat.toFixed(4)+','+centerLng.toFixed(4)+'), radius='+radius+'mi, types=['+types.join(',')+'], zoom='+map.getZoom()+', state='+(filteredState||'-'));
         if(!types.length){clusterLayer.clearLayers();currentFacilities=[];updateStats([]);showEmptyState('no-types');return}
-        const params={p_lat:c.lat,p_lng:c.lng,p_radius_miles:radius,p_types:types,p_min_score:null,p_require_nicu:!!activeSpecialties.nicu,p_require_cath:!!activeSpecialties.cath,p_require_trauma:!!activeSpecialties.trauma,p_require_teaching:!!activeSpecialties.teaching,p_require_er:!!activeSpecialties.er,p_limit:5000};
+        const params={p_lat:centerLat,p_lng:centerLng,p_radius_miles:radius,p_types:types,p_min_score:null,p_require_nicu:!!activeSpecialties.nicu,p_require_cath:!!activeSpecialties.cath,p_require_trauma:!!activeSpecialties.trauma,p_require_teaching:!!activeSpecialties.teaching,p_require_er:!!activeSpecialties.er,p_limit:5000};
         dlog('RPC params:',JSON.stringify(params));
         showLoading(true);
         try{if(inflightController)inflightController.abort();inflightController=new AbortController();
         const{data,error}=await sb.rpc('nearby_facilities',params);if(error)throw error;
-        currentFacilities=data||[];dlog('RPC returned '+currentFacilities.length+' facilities');
+        let rows=data||[];
+        const rawCount=rows.length;
+        if(filteredState)rows=rows.filter(r=>r.state===filteredState);
+        currentFacilities=rows;
+        dlog('RPC returned '+rawCount+' rows, '+currentFacilities.length+' after state filter');
         if(currentFacilities.length>0){const tc={};currentFacilities.forEach(f=>{tc[f.facility_type]=(tc[f.facility_type]||0)+1});dlog('Type breakdown:',JSON.stringify(tc))}
         renderMarkers(currentFacilities);updateStats(currentFacilities);
         const ov=document.getElementById('map-empty-overlay');if(ov&&currentFacilities.length>0)ov.remove();
@@ -441,7 +521,7 @@
 
     function showEmptyState(reason){const el=document.getElementById('map-empty-overlay');if(el)el.remove();if(currentFacilities.length>0)return;const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';if(reason==='no-types')o.innerHTML='<i class="fas fa-filter"></i><h4>No types selected</h4><p>Enable at least one facility type.</p>';else o.innerHTML='<i class="fas fa-search"></i><h4>No facilities found</h4><p>Try zooming out or adjusting filters.</p><button class="clear-btn" type="button" onclick="clearAllFilters()">Clear Filters</button>';document.getElementById('map-page').appendChild(o)}
     function showErrorState(err){const el=document.getElementById('map-empty-overlay');if(el)el.remove();const o=document.createElement('div');o.id='map-empty-overlay';o.className='error-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';o.innerHTML='<i class="fas fa-triangle-exclamation"></i><h4>Unable to load</h4><p>'+escapeHtml(err.message||'Error')+'</p><button class="retry-btn" type="button" onclick="onViewChange();this.closest(\'.error-state\').remove()">Retry</button>';document.getElementById('map-page').appendChild(o)}
-    function clearAllFilters(){activeTypes=new Set(FACILITY_TYPES.map(t=>t.value));Object.keys(activeSpecialties).forEach(k=>activeSpecialties[k]=false);syncChips();const o=document.getElementById('map-empty-overlay');if(o)o.remove();onViewChange()}
+    function clearAllFilters(){activeTypes=new Set(FACILITY_TYPES.map(t=>t.value));Object.keys(activeSpecialties).forEach(k=>activeSpecialties[k]=false);filteredState=null;updateStateFilterIndicator();syncChips();const o=document.getElementById('map-empty-overlay');if(o)o.remove();onViewChange()}
     function showLoading(a){const el=document.getElementById('query-loading');if(a)el.classList.add('active');else el.classList.remove('active')}
 
     async function openFacilityDetail(fid){
