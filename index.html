@@ -1,7 +1,21 @@
 <!--
-  ForThePatient.org v4.0 (Session I-UX — April 2026)
-  State-clustered national view, simplified filter bar, increased limits.
-  See handoff doc for full changelog.
+  ForThePatient.org v4.1 (Session K1 — May 2026)
+  Mobile audit & fix pass.
+  Changelog vs v4.0:
+    - Inline About page removed (now /about static page).
+    - Header Map/About converted to <a> anchors; logo wrapped in home anchor.
+    - Footer-bar visible on mobile portrait (hidden in landscape).
+    - Filter chip-scroll: mobile fade-mask affordance + safe-area inset.
+    - Search input bumped to 16px on mobile (kills iOS auto-zoom-on-focus).
+    - Bottom sheet rewrite: dedicated close button, dynamic snap recompute on
+      resize/rotate, listeners replaced via cloneNode, no more 64px peek-stuck.
+    - Pin button hidden on mobile (info-panel doesn't exist on mobile).
+    - Touch targets bumped to >=40px across nav, chips, action buttons.
+    - facility-info gains horizontal safe-area padding.
+    - Console output gated behind DEBUG flag (?debug=1 or localhost).
+    - Resize / orientationchange handler rebinds sheet handle and re-snaps.
+    - <=380px breakpoint added for narrow phones.
+    - Misc: leaflet attribution shrunk, theme-color set on load.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -29,13 +43,14 @@
 
         .header{position:fixed;top:0;left:0;right:0;z-index:1000;background:rgba(255,255,255,.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border);height:calc(var(--header-h) + var(--safe-top));padding-top:var(--safe-top);transition:all .3s}
         [data-theme="dark"] .header{background:rgba(44,62,80,.95)}
-        .header-inner{max-width:1400px;margin:0 auto;padding:0 16px;padding-left:calc(16px + var(--safe-left));padding-right:calc(16px + var(--safe-right));display:flex;align-items:center;justify-content:space-between;height:var(--header-h)}
+        .header-inner{max-width:1400px;margin:0 auto;padding:0 16px;padding-left:calc(16px + var(--safe-left));padding-right:calc(16px + var(--safe-right));display:flex;align-items:center;justify-content:space-between;height:var(--header-h);gap:8px}
+        .logo-link{display:flex;align-items:baseline;text-decoration:none;color:inherit;min-width:0}
         .logo{font-size:1.15rem;font-weight:600;color:var(--text-primary);letter-spacing:-.02em;white-space:nowrap}
-        .logo-sub{font-size:.68rem;color:var(--text-secondary);font-weight:400;text-transform:uppercase;letter-spacing:.06em;margin-left:8px}
-        .header-right{display:flex;align-items:center;gap:10px}
-        .nav-btn{color:var(--text-secondary);text-decoration:none;font-size:.8rem;font-weight:500;padding:6px 10px;border-radius:6px;border:none;background:none;cursor:pointer;font-family:inherit;transition:color .2s,background .2s}
+        .logo-sub{font-size:.68rem;color:var(--text-secondary);font-weight:400;text-transform:uppercase;letter-spacing:.06em;margin-left:8px;white-space:nowrap}
+        .header-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+        .nav-btn{color:var(--text-secondary);text-decoration:none;font-size:.8rem;font-weight:500;padding:6px 10px;border-radius:6px;border:none;background:none;cursor:pointer;font-family:inherit;transition:color .2s,background .2s;display:inline-flex;align-items:center;justify-content:center;min-height:32px}
         .nav-btn:hover,.nav-btn.active{color:var(--accent);background:var(--hover-bg)}
-        .toggle-switch{position:relative;width:44px;height:26px;background:var(--border);border-radius:13px;cursor:pointer;transition:background .3s;border:none;min-width:44px}
+        .toggle-switch{position:relative;width:44px;height:26px;background:var(--border);border-radius:13px;cursor:pointer;transition:background .3s;border:none;min-width:44px;flex-shrink:0}
         .toggle-switch.active{background:var(--accent)}
         .toggle-slider{position:absolute;top:2px;left:2px;width:22px;height:22px;background:var(--card-bg);border-radius:50%;transition:transform .3s;display:flex;align-items:center;justify-content:center;font-size:.65rem;color:var(--text-secondary)}
         .toggle-switch.active .toggle-slider{transform:translateX(18px)}
@@ -49,12 +64,13 @@
         .search-compact input{width:180px;padding:7px 10px 7px 30px;border:1px solid var(--border);border-radius:8px;font-size:.8rem;background:var(--card-bg);color:var(--text-primary);font-family:inherit;transition:border-color .2s,width .3s;min-height:36px}
         .search-compact input:focus{border-color:var(--accent);width:240px}
         .search-compact .search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:.7rem;color:var(--text-secondary);pointer-events:none}
-        .search-compact .name-results{position:absolute;top:100%;left:0;width:320px;background:var(--card-bg);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;box-shadow:0 4px 16px rgba(0,0,0,.1);max-height:280px;overflow-y:auto;display:none;z-index:600}
+        .search-compact .name-results{position:absolute;top:100%;left:0;width:320px;max-width:calc(100vw - 24px - var(--safe-left) - var(--safe-right));background:var(--card-bg);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;box-shadow:0 4px 16px rgba(0,0,0,.1);max-height:280px;overflow-y:auto;display:none;z-index:600}
         .search-compact .name-results.active{display:block}
         .filter-divider{width:1px;height:24px;background:var(--border);flex-shrink:0}
-        .chip-scroll{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;flex:1;min-width:0}
+        .chip-scroll-wrap{position:relative;flex:1;min-width:0;display:flex;align-items:center}
+        .chip-scroll{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;flex:1;min-width:0;padding-right:2px}
         .chip-scroll::-webkit-scrollbar{display:none}
-        .f-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:1px solid var(--border);border-radius:16px;font-size:.72rem;font-weight:500;cursor:pointer;background:var(--card-bg);color:var(--text-secondary);transition:all .15s;user-select:none;white-space:nowrap;min-height:32px;flex-shrink:0}
+        .f-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:1px solid var(--border);border-radius:16px;font-size:.72rem;font-weight:500;cursor:pointer;background:var(--card-bg);color:var(--text-secondary);transition:all .15s;user-select:none;white-space:nowrap;min-height:32px;flex-shrink:0;font-family:inherit}
         .f-chip:hover{background:var(--hover-bg);color:var(--text-primary)}
         .f-chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
         .f-chip.spec{border-style:dashed}
@@ -64,21 +80,21 @@
         .stats-inline{display:flex;gap:12px;align-items:center;flex-shrink:0;margin-left:auto;font-size:.72rem;color:var(--text-secondary);white-space:nowrap}
         .stats-inline strong{font-weight:700;color:var(--text-primary);font-variant-numeric:tabular-nums}
 
-        .info-panel{position:absolute;top:68px;right:12px;width:var(--detail-w);max-height:calc(100vh - var(--header-h) - var(--safe-top) - 100px);overflow-y:auto;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);z-index:450;display:none;transition:all .3s}
+        .info-panel{position:absolute;top:68px;right:12px;width:var(--detail-w);max-height:calc(100dvh - var(--header-h) - var(--safe-top) - 100px);overflow-y:auto;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);z-index:450;display:none;transition:all .3s}
         .info-panel.active{display:block}
         .info-panel.pinned{top:0;right:0;height:100%;max-height:100%;border-radius:0;border-right:none;border-top:none;border-bottom:none}
         .resize-handle{position:absolute;top:0;left:-4px;width:8px;height:100%;cursor:col-resize;z-index:10}
         .resize-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:3px;height:32px;border-radius:2px;background:var(--border);opacity:0;transition:opacity .2s}
         .resize-handle:hover::after,.resize-handle:active::after{opacity:1}
 
-        .facility-info{padding:22px;position:relative;padding-top:14px}
+        .facility-info{padding:22px;position:relative;padding-top:14px;padding-left:max(22px,calc(22px + var(--safe-left)));padding-right:max(22px,calc(22px + var(--safe-right)))}
         .detail-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-bottom:8px}
-        .detail-action-btn{background:none;border:none;font-size:.85rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:all .2s;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center}
+        .detail-action-btn{background:none;border:none;font-size:.85rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:all .2s;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center;font-family:inherit}
         .detail-action-btn:hover{background:var(--hover-bg);color:var(--text-primary)}
         .facility-header{border-bottom:1px solid var(--border);padding-bottom:16px;margin-bottom:16px}
-        .facility-name{font-size:1.1rem;font-weight:600;color:var(--text-primary);margin-bottom:4px;line-height:1.3}
+        .facility-name{font-size:1.1rem;font-weight:600;color:var(--text-primary);margin-bottom:4px;line-height:1.3;word-wrap:break-word;overflow-wrap:anywhere}
         .facility-type-line{font-size:.72rem;color:var(--text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
-        .score-block{display:flex;align-items:center;gap:14px;margin-top:6px}
+        .score-block{display:flex;align-items:center;gap:14px;margin-top:6px;flex-wrap:wrap}
         .score-circle{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.55rem;font-weight:700;color:#2C3E50;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.08)}
         .score-circle.unrated{color:var(--text-secondary)}
         .score-meta{flex:1;min-width:0}
@@ -90,7 +106,7 @@
         .section-header{font-size:.72rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 10px}
         .component-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem}
         .component-row:last-child{border-bottom:none}
-        .component-name{color:var(--text-primary)}
+        .component-name{color:var(--text-primary);min-width:0;overflow-wrap:anywhere}
         .component-weight{color:var(--text-secondary);font-size:.72rem}
         .component-score{font-weight:600;min-width:36px;text-align:right;font-variant-numeric:tabular-nums}
         .component-bar{grid-column:1/-1;height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:4px}
@@ -101,11 +117,11 @@
         .enforcement-block{margin-top:14px;padding:12px;background:rgba(232,160,160,.12);border:1px solid rgba(232,160,160,.4);border-radius:8px;font-size:.78rem}
         .enforcement-title{font-weight:600;color:var(--text-primary);margin-bottom:4px}
         .enforcement-amt{font-size:.7rem;color:var(--text-secondary)}
-        .addr-block{margin-top:16px;font-size:.8rem;color:var(--text-secondary);line-height:1.55}
+        .addr-block{margin-top:16px;font-size:.8rem;color:var(--text-secondary);line-height:1.55;overflow-wrap:anywhere}
         .addr-block i{width:16px;color:var(--accent);margin-right:4px}
-        .directions-btn{display:block;text-align:center;margin-top:16px;padding:11px;background:var(--accent);color:#fff;text-decoration:none;border-radius:8px;font-size:.875rem;font-weight:500;min-height:44px;line-height:22px}
+        .directions-btn{display:block;text-align:center;margin-top:16px;padding:12px;background:var(--accent);color:#fff;text-decoration:none;border-radius:8px;font-size:.875rem;font-weight:500;min-height:48px;line-height:24px}
 
-        .name-result-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.82rem;min-height:44px;display:flex;flex-direction:column;justify-content:center}
+        .name-result-item{padding:12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.82rem;min-height:48px;display:flex;flex-direction:column;justify-content:center}
         .name-result-item:last-child{border-bottom:none}
         .name-result-item:hover,.name-result-item.kb-active{background:var(--hover-bg)}
         .name-result-name{font-weight:600;color:var(--text-primary)}
@@ -137,7 +153,7 @@
         .empty-state i,.error-state i{font-size:2rem;margin-bottom:12px;color:var(--border)}
         .empty-state h4,.error-state h4{font-size:1rem;font-weight:600;color:var(--text-secondary);margin-bottom:4px}
         .empty-state p,.error-state p{font-size:.875rem;margin-bottom:12px}
-        .clear-btn,.retry-btn{padding:10px 20px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:500;cursor:pointer;font-family:inherit;min-height:44px;transition:opacity .2s}
+        .clear-btn,.retry-btn{padding:12px 22px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:.875rem;font-weight:500;cursor:pointer;font-family:inherit;min-height:48px;transition:opacity .2s}
         .clear-btn:hover,.retry-btn:hover{opacity:.85}
         .error-link{display:block;margin-top:8px;font-size:.75rem;color:var(--accent)}
 
@@ -155,25 +171,20 @@
         .leaflet-popup-content{margin:14px;font-size:.82rem;line-height:1.4}
         .leaflet-popup-tip{background:var(--card-bg)}
         .leaflet-control-zoom{display:none!important}
+        .leaflet-control-attribution{font-size:.62rem!important;padding:1px 5px!important}
 
-        .page-content{display:none;margin-top:calc(var(--header-h) + var(--safe-top));padding:40px 20px;max-width:800px;margin-left:auto;margin-right:auto;height:calc(100vh - var(--header-h) - var(--safe-top));height:calc(100dvh - var(--header-h) - var(--safe-top));overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none}
-        .page-content::-webkit-scrollbar{display:none}
-        .page-content.active{display:block}
-        .about-content{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:40px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
-        .about-title{font-size:2rem;font-weight:700;color:var(--text-primary);margin-bottom:24px;text-align:center}
-        .about-section{margin-bottom:32px}
-        .about-section h3{font-size:1.25rem;font-weight:600;color:var(--accent);margin-bottom:12px}
-        .about-section p{color:var(--text-secondary);line-height:1.6;margin-bottom:12px}
-
-        .footer-bar{position:absolute;bottom:calc(12px + var(--safe-bottom));left:50%;transform:translateX(-50%);background:rgba(255,255,255,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:20px;padding:6px 16px;font-size:.68rem;display:flex;gap:12px;z-index:350;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+        .footer-bar{position:absolute;bottom:calc(12px + var(--safe-bottom));left:50%;transform:translateX(-50%);background:rgba(255,255,255,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:20px;padding:6px 16px;font-size:.68rem;display:flex;gap:12px;z-index:350;box-shadow:0 2px 12px rgba(0,0,0,.06);max-width:calc(100% - 24px);overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;white-space:nowrap}
+        .footer-bar::-webkit-scrollbar{display:none}
         [data-theme="dark"] .footer-bar{background:rgba(44,62,80,.92)}
-        .footer-bar a{color:var(--text-secondary);text-decoration:none;transition:color .15s}
+        .footer-bar a{color:var(--text-secondary);text-decoration:none;transition:color .15s;flex-shrink:0}
         .footer-bar a:hover{color:var(--accent)}
 
-        .bottom-sheet{display:none;position:fixed;left:0;right:0;bottom:0;z-index:800;background:var(--card-bg);border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.12);transition:transform .3s cubic-bezier(.25,.1,.25,1);max-height:90vh;max-height:90dvh;padding-bottom:var(--safe-bottom);touch-action:none}
-        .sheet-handle{display:flex;justify-content:center;padding:10px 0 6px;cursor:grab}
+        .bottom-sheet{display:none;position:fixed;left:0;right:0;bottom:0;z-index:800;background:var(--card-bg);border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.12);height:0;max-height:90vh;max-height:90dvh;overflow:hidden;transition:height .3s cubic-bezier(.25,.1,.25,1);touch-action:none;flex-direction:column;box-sizing:border-box}
+        .sheet-handle{display:flex;justify-content:center;padding:10px 0 6px;cursor:grab;flex-shrink:0;touch-action:none}
         .sheet-handle::after{content:'';width:40px;height:4px;background:var(--border);border-radius:2px}
-        .sheet-body{overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;max-height:calc(90vh - 40px);max-height:calc(90dvh - 40px);padding:0 20px 20px}
+        .sheet-close-btn{position:absolute;top:6px;right:10px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:none;border:none;color:var(--text-secondary);font-size:1rem;cursor:pointer;z-index:10;border-radius:8px;font-family:inherit;padding:0}
+        .sheet-close-btn:hover,.sheet-close-btn:focus-visible{background:var(--hover-bg);color:var(--text-primary)}
+        .sheet-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:0 0 calc(20px + var(--safe-bottom))}
 
         ::-webkit-scrollbar{width:6px;height:6px}
         ::-webkit-scrollbar-track{background:var(--bg)}
@@ -183,16 +194,40 @@
         [data-tooltip]:hover::after{content:attr(data-tooltip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--text-primary);color:var(--card-bg);padding:4px 8px;border-radius:4px;font-size:.68rem;white-space:nowrap;z-index:1000;pointer-events:none}
 
         @media(max-width:768px){
-            .filter-bar{top:8px;left:8px;right:8px;padding:6px 8px;gap:6px}
-            .search-compact input{width:120px;padding:6px 8px 6px 26px;font-size:.75rem}
-            .search-compact input:focus{width:160px}
+            .filter-bar{top:8px;left:calc(8px + var(--safe-left));right:calc(8px + var(--safe-right));padding:6px 8px;gap:6px}
+            .search-compact input{width:140px;padding:8px 10px 8px 28px;font-size:16px;min-height:40px}
+            .search-compact input:focus{width:180px}
+            .search-compact .search-icon{font-size:.78rem}
             .info-panel{display:none!important}
-            .footer-bar{display:none}
-            .bottom-sheet{display:block}
+            .bottom-sheet{display:flex}
             .stats-inline{display:none}
             .logo-sub{display:none}
+            .nav-btn{padding:8px 10px;min-height:36px;font-size:.82rem}
+            .f-chip{padding:7px 12px;min-height:36px;font-size:.78rem}
+            .detail-action-btn{min-width:40px;min-height:40px;font-size:.95rem}
+            .detail-action-btn[data-pin]{display:none!important}
+            .chip-scroll-wrap{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 12px,#000 calc(100% - 18px),transparent 100%);mask-image:linear-gradient(to right,transparent 0,#000 12px,#000 calc(100% - 18px),transparent 100%)}
+            .footer-bar{bottom:calc(10px + var(--safe-bottom));padding:5px 12px;font-size:.64rem;gap:10px;left:calc(50%);right:auto;max-width:calc(100% - 16px)}
+            .facility-info{padding:18px;padding-top:14px;padding-left:max(16px,calc(16px + var(--safe-left)));padding-right:max(16px,calc(16px + var(--safe-right)))}
+            .facility-name{font-size:1.05rem}
+            .header-inner{padding:0 12px;padding-left:calc(12px + var(--safe-left));padding-right:calc(12px + var(--safe-right));gap:6px}
+            .header-right{gap:6px}
         }
-        @media(max-width:768px) and (orientation:landscape){:root{--header-h:40px}}
+        @media(max-width:768px) and (orientation:landscape){
+            :root{--header-h:40px}
+            .footer-bar{display:none}
+        }
+        @media(max-width:380px){
+            .nav-btn{padding:6px 8px;font-size:.76rem;min-height:34px}
+            .logo{font-size:1rem}
+            .header-right{gap:4px}
+            .search-compact input{width:118px}
+            .search-compact input:focus{width:150px}
+            .filter-bar{padding:5px 6px;gap:5px}
+            .toggle-switch{width:40px;min-width:40px;height:24px}
+            .toggle-switch .toggle-slider{width:20px;height:20px}
+            .toggle-switch.active .toggle-slider{transform:translateX(16px)}
+        }
         @media print{
             body{background:#fff;color:#000;overflow:visible;height:auto}
             .header,#map,.filter-bar,.footer-bar,.loading-overlay,.query-loading,.bottom-sheet,.offline-toast,.detail-action-btn,.resize-handle,.directions-btn{display:none!important}
@@ -211,12 +246,12 @@
 
     <header class="header" role="banner">
         <div class="header-inner">
-            <div style="display:flex;align-items:baseline"><div class="logo">For The Patient</div><span class="logo-sub">Healthcare Quality</span></div>
+            <a href="/" class="logo-link" aria-label="ForThePatient home"><div class="logo">For The Patient</div><span class="logo-sub">Healthcare Quality</span></a>
             <div class="header-right">
-                <button class="nav-btn active" onclick="showMap()" aria-label="Show map">Map</button>
-                <button class="nav-btn" onclick="showAbout()" aria-label="About">About</button>
+                <a class="nav-btn active" href="/" aria-label="Map" aria-current="page">Map</a>
+                <a class="nav-btn" href="/about" aria-label="About">About</a>
                 <a class="nav-btn" href="/methodology" aria-label="Methodology">Method</a>
-                <button class="toggle-switch" id="theme-toggle-btn" onclick="toggleTheme()" role="switch" aria-checked="false" aria-label="Toggle dark mode"><div class="toggle-slider"><i class="fas fa-sun" aria-hidden="true"></i></div></button>
+                <button class="toggle-switch" id="theme-toggle-btn" onclick="toggleTheme()" role="switch" aria-checked="false" aria-label="Toggle dark mode" type="button"><div class="toggle-slider"><i class="fas fa-sun" aria-hidden="true"></i></div></button>
             </div>
         </div>
     </header>
@@ -225,25 +260,19 @@
         <div id="map" role="application" aria-label="Healthcare facility map"></div>
         <div class="query-loading" id="query-loading" role="progressbar" aria-label="Loading"></div>
         <div class="filter-bar" id="filter-bar" role="search" aria-label="Filters">
-            <div class="search-compact"><i class="fas fa-search search-icon" aria-hidden="true"></i><input type="text" id="name-search" placeholder="Search facility…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="name-results" aria-autocomplete="list" aria-label="Search facility by name"><div class="name-results" id="name-results" role="listbox"></div></div>
+            <div class="search-compact"><i class="fas fa-search search-icon" aria-hidden="true"></i><input type="text" id="name-search" placeholder="Search facility…" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="name-results" aria-autocomplete="list" aria-label="Search facility by name"><div class="name-results" id="name-results" role="listbox"></div></div>
             <div class="filter-divider" aria-hidden="true"></div>
-            <div class="chip-scroll" id="chip-scroll" role="group" aria-label="Filters"></div>
+            <div class="chip-scroll-wrap"><div class="chip-scroll" id="chip-scroll" role="group" aria-label="Filters"></div></div>
             <div class="stats-inline" aria-live="polite"><span><strong id="total-count">0</strong> in view</span><span>avg <strong id="avg-score">—</strong></span></div>
         </div>
         <aside class="info-panel" id="info-panel" role="dialog" aria-modal="false" aria-label="Facility details"><div class="resize-handle" id="resize-handle" aria-hidden="true"></div><div id="facility-info-content"><div class="empty-state"><i class="fas fa-map-marker-alt" aria-hidden="true"></i><h4>Select a Facility</h4><p>Click any point on the map to view detailed quality scores</p></div></div></aside>
-        <div class="footer-bar" aria-label="Legal"><a href="/methodology">Methodology</a><a href="/medical-disclaimer">Disclaimer</a><a href="/dispute-process">Dispute</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>
+        <div class="footer-bar" aria-label="Legal"><a href="/about">About</a><a href="/methodology">Methodology</a><a href="/medical-disclaimer">Disclaimer</a><a href="/dispute-process">Dispute</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>
     </main>
 
-    <div class="bottom-sheet" id="detail-sheet" aria-label="Facility details" role="dialog"><div class="sheet-handle" id="detail-sheet-handle" aria-hidden="true"></div><div class="sheet-body" id="detail-sheet-body"></div></div>
-
-    <div class="page-content" id="about-page">
-        <div class="about-content">
-            <h1 class="about-title">About For The Patient</h1>
-            <div class="about-section"><p>ForThePatient.org is a 501(c)(3) nonprofit publishing independent quality scores for all 48,000+ Medicare-certified healthcare facilities in the United States — hospitals, nursing homes, dialysis centers, home health agencies, hospices, inpatient rehab, and long-term care.</p><p>Our mission is to empower patients with transparent, data-driven information so they can choose where to receive care.</p></div>
-            <div class="about-section"><h3>How we're different</h3><p><strong>Zero industry funding.</strong> No facility revenue, no pharma donations, ever.</p><p><strong>Compulsory data only.</strong> We use government-mandated reporting from CMS — never self-reported quality claims.</p><p><strong>Complete methodological transparency.</strong> Every formula is public.</p><p><strong>Exponential recency decay.</strong> Our scores surface current quality, not historical averages.</p></div>
-            <div class="about-section"><h3>Our scoring</h3><p>Each facility receives a composite score from 1.0 to 10.0, built from 4–5 weighted components specific to that facility type. Every component is derived from public CMS datasets and runs through the same percentile-ranking machinery.</p></div>
-            <div class="about-section"><h3>Legal</h3><p><a href="/methodology">Methodology</a> · <a href="/medical-disclaimer">Medical Disclaimer</a> · <a href="/dispute-process">Dispute Process</a> · <a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms of Use</a></p></div>
-        </div>
+    <div class="bottom-sheet" id="detail-sheet" aria-label="Facility details" role="dialog" aria-modal="true" aria-hidden="true">
+        <button class="sheet-close-btn" id="sheet-close-btn" aria-label="Close facility details" type="button"><i class="fas fa-times" aria-hidden="true"></i></button>
+        <div class="sheet-handle" id="detail-sheet-handle" aria-hidden="true"></div>
+        <div class="sheet-body" id="detail-sheet-body"></div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -262,12 +291,18 @@
     const US_STATES=[{n:'Alabama',s:'AL',lat:32.806671,lng:-86.79113},{n:'Alaska',s:'AK',lat:61.370716,lng:-152.404419},{n:'Arizona',s:'AZ',lat:33.729759,lng:-111.431221},{n:'Arkansas',s:'AR',lat:34.969704,lng:-92.373123},{n:'California',s:'CA',lat:36.116203,lng:-119.681564},{n:'Colorado',s:'CO',lat:39.059811,lng:-105.311104},{n:'Connecticut',s:'CT',lat:41.597782,lng:-72.755371},{n:'Delaware',s:'DE',lat:39.318523,lng:-75.507141},{n:'Florida',s:'FL',lat:27.766279,lng:-81.686783},{n:'Georgia',s:'GA',lat:33.040619,lng:-83.643074},{n:'Hawaii',s:'HI',lat:21.094318,lng:-157.498337},{n:'Idaho',s:'ID',lat:44.240459,lng:-114.478773},{n:'Illinois',s:'IL',lat:40.349457,lng:-88.986137},{n:'Indiana',s:'IN',lat:39.849426,lng:-86.258278},{n:'Iowa',s:'IA',lat:42.011539,lng:-93.210526},{n:'Kansas',s:'KS',lat:38.5266,lng:-96.726486},{n:'Kentucky',s:'KY',lat:37.66814,lng:-84.670067},{n:'Louisiana',s:'LA',lat:31.169546,lng:-91.867805},{n:'Maine',s:'ME',lat:44.693947,lng:-69.381927},{n:'Maryland',s:'MD',lat:39.063946,lng:-76.802101},{n:'Massachusetts',s:'MA',lat:42.230171,lng:-71.530106},{n:'Michigan',s:'MI',lat:43.326618,lng:-84.536095},{n:'Minnesota',s:'MN',lat:45.694454,lng:-93.900192},{n:'Mississippi',s:'MS',lat:32.741646,lng:-89.678696},{n:'Missouri',s:'MO',lat:38.456085,lng:-92.288368},{n:'Montana',s:'MT',lat:46.921925,lng:-110.454353},{n:'Nebraska',s:'NE',lat:41.12537,lng:-98.268082},{n:'Nevada',s:'NV',lat:38.313515,lng:-117.055374},{n:'New Hampshire',s:'NH',lat:43.452492,lng:-71.563896},{n:'New Jersey',s:'NJ',lat:40.298904,lng:-74.521011},{n:'New Mexico',s:'NM',lat:34.840515,lng:-106.248482},{n:'New York',s:'NY',lat:42.165726,lng:-74.948051},{n:'North Carolina',s:'NC',lat:35.630066,lng:-79.806419},{n:'North Dakota',s:'ND',lat:47.528912,lng:-99.784012},{n:'Ohio',s:'OH',lat:40.388783,lng:-82.764915},{n:'Oklahoma',s:'OK',lat:35.565342,lng:-96.928917},{n:'Oregon',s:'OR',lat:44.572021,lng:-122.070938},{n:'Pennsylvania',s:'PA',lat:40.590752,lng:-77.209755},{n:'Rhode Island',s:'RI',lat:41.680893,lng:-71.51178},{n:'South Carolina',s:'SC',lat:33.856892,lng:-80.945007},{n:'South Dakota',s:'SD',lat:44.299782,lng:-99.438828},{n:'Tennessee',s:'TN',lat:35.747845,lng:-86.692345},{n:'Texas',s:'TX',lat:31.054487,lng:-97.563461},{n:'Utah',s:'UT',lat:40.150032,lng:-111.862434},{n:'Vermont',s:'VT',lat:44.045876,lng:-72.710686},{n:'Virginia',s:'VA',lat:37.769337,lng:-78.169968},{n:'Washington',s:'WA',lat:47.400902,lng:-121.490494},{n:'West Virginia',s:'WV',lat:38.491226,lng:-80.954456},{n:'Wisconsin',s:'WI',lat:44.268543,lng:-89.616508},{n:'Wyoming',s:'WY',lat:42.755966,lng:-107.30249},{n:'District of Columbia',s:'DC',lat:38.897438,lng:-77.026817},{n:'Puerto Rico',s:'PR',lat:18.220833,lng:-66.590149},{n:'Guam',s:'GU',lat:13.444304,lng:144.793731},{n:'U.S. Virgin Islands',s:'VI',lat:18.335765,lng:-64.896335}];
     const STATE_BY_ABBR=Object.fromEntries(US_STATES.map(s=>[s.s,s]));
 
+    // Debug logging gate: only console.log in localhost or with ?debug=1
+    const DEBUG=(function(){try{return(new URLSearchParams(location.search).get('debug')==='1')||location.hostname==='localhost'||location.hostname==='127.0.0.1'}catch(e){return false}})();
+    const dlog=DEBUG?console.log.bind(console,'[FTP]'):function(){};
+    const derr=DEBUG?console.error.bind(console,'[FTP]'):function(){};
+
     let map,clusterLayer,stateBubbleLayer;
     let currentTheme='light',currentFacilities=[],openFacilityId=null;
     let activeTypes=new Set(FACILITY_TYPES.map(t=>t.value));
     let activeSpecialties={teaching:false,nicu:false,cath:false,trauma:false,er:false};
     let isMobile=false,isOnline=navigator.onLine,isTouching=false,pendingFetch=false,detailPanelPinned=false,inflightController=null;
     let stateSummaryCache=null,currentViewMode='state';
+    let sheetState='closed';
 
     function classColor(c){return CLASS_COLORS[c]||CLASS_COLORS.Unrated}
     function classBadgeClass(c){return(!c||c==='Unrated')?'unrated':''}
@@ -311,7 +346,7 @@
         document.getElementById('loading').classList.add('hidden');
     }
 
-    async function loadStateSummary(){try{const{data,error}=await sb.from('state_summary').select('*');if(error)throw error;stateSummaryCache=data||[];console.log('[FTP] state_summary:',stateSummaryCache.length,'rows')}catch(e){console.error('[FTP] state_summary failed:',e);stateSummaryCache=[]}}
+    async function loadStateSummary(){try{const{data,error}=await sb.from('state_summary').select('*');if(error)throw error;stateSummaryCache=data||[];dlog('state_summary:',stateSummaryCache.length,'rows')}catch(e){derr('state_summary failed:',e);stateSummaryCache=[]}}
 
     function onViewChange(){if(!map)return;const z=map.getZoom();if(z<STATE_ZOOM){if(currentViewMode!=='state'){clusterLayer.clearLayers();currentFacilities=[]}currentViewMode='state';renderStateBubbles()}else{if(currentViewMode!=='facility')stateBubbleLayer.clearLayers();currentViewMode='facility';fetchInView()}}
 
@@ -357,9 +392,9 @@
 
     function buildFilterChips(){
         const sc=document.getElementById('chip-scroll');sc.innerHTML='';
-        FACILITY_TYPES.forEach(t=>{const c=document.createElement('button');c.className='f-chip'+(activeTypes.has(t.value)?' active':'');c.dataset.type=t.value;c.setAttribute('role','switch');c.setAttribute('aria-checked',activeTypes.has(t.value));c.setAttribute('aria-label',t.label);c.innerHTML='<i class="fas '+t.icon+'" aria-hidden="true"></i> '+t.label;c.addEventListener('click',()=>{if(activeTypes.has(t.value))activeTypes.delete(t.value);else activeTypes.add(t.value);haptic(10);syncChips();onViewChange()});sc.appendChild(c)});
+        FACILITY_TYPES.forEach(t=>{const c=document.createElement('button');c.className='f-chip'+(activeTypes.has(t.value)?' active':'');c.dataset.type=t.value;c.setAttribute('role','switch');c.setAttribute('aria-checked',activeTypes.has(t.value));c.setAttribute('aria-label',t.label);c.type='button';c.innerHTML='<i class="fas '+t.icon+'" aria-hidden="true"></i> '+t.label;c.addEventListener('click',()=>{if(activeTypes.has(t.value))activeTypes.delete(t.value);else activeTypes.add(t.value);haptic(10);syncChips();onViewChange()});sc.appendChild(c)});
         const dv=document.createElement('div');dv.className='filter-divider';dv.id='spec-divider';dv.setAttribute('aria-hidden','true');sc.appendChild(dv);
-        SPECIALTIES.forEach(sp=>{const c=document.createElement('button');c.className='f-chip spec'+(activeSpecialties[sp.key]?' active':'');c.dataset.spec=sp.key;c.setAttribute('role','switch');c.setAttribute('aria-checked',activeSpecialties[sp.key]);c.setAttribute('aria-label',sp.label);c.innerHTML='<i class="fas '+sp.icon+'" aria-hidden="true"></i> '+sp.label;c.addEventListener('click',()=>{if(c.classList.contains('disabled'))return;activeSpecialties[sp.key]=!activeSpecialties[sp.key];haptic(10);syncChips();onViewChange()});sc.appendChild(c)});
+        SPECIALTIES.forEach(sp=>{const c=document.createElement('button');c.className='f-chip spec'+(activeSpecialties[sp.key]?' active':'');c.dataset.spec=sp.key;c.setAttribute('role','switch');c.setAttribute('aria-checked',activeSpecialties[sp.key]);c.setAttribute('aria-label',sp.label);c.type='button';c.innerHTML='<i class="fas '+sp.icon+'" aria-hidden="true"></i> '+sp.label;c.addEventListener('click',()=>{if(c.classList.contains('disabled'))return;activeSpecialties[sp.key]=!activeSpecialties[sp.key];haptic(10);syncChips();onViewChange()});sc.appendChild(c)});
         syncChips();
     }
 
@@ -374,19 +409,19 @@
     async function fetchInView(){
         if(!map||!isOnline)return;
         const c=map.getCenter(),radius=getViewportRadiusMiles(),types=Array.from(activeTypes);
-        console.log('[FTP] fetchInView: center=('+c.lat.toFixed(4)+','+c.lng.toFixed(4)+'), radius='+radius+'mi, types=['+types.join(',')+'], zoom='+map.getZoom());
+        dlog('fetchInView: center=('+c.lat.toFixed(4)+','+c.lng.toFixed(4)+'), radius='+radius+'mi, types=['+types.join(',')+'], zoom='+map.getZoom());
         if(!types.length){clusterLayer.clearLayers();currentFacilities=[];updateStats([]);showEmptyState('no-types');return}
         const params={p_lat:c.lat,p_lng:c.lng,p_radius_miles:radius,p_types:types,p_min_score:null,p_require_nicu:!!activeSpecialties.nicu,p_require_cath:!!activeSpecialties.cath,p_require_trauma:!!activeSpecialties.trauma,p_require_teaching:!!activeSpecialties.teaching,p_require_er:!!activeSpecialties.er,p_limit:5000};
-        console.log('[FTP] RPC params:',JSON.stringify(params));
+        dlog('RPC params:',JSON.stringify(params));
         showLoading(true);
         try{if(inflightController)inflightController.abort();inflightController=new AbortController();
         const{data,error}=await sb.rpc('nearby_facilities',params);if(error)throw error;
-        currentFacilities=data||[];console.log('[FTP] RPC returned '+currentFacilities.length+' facilities');
-        if(currentFacilities.length>0){const tc={};currentFacilities.forEach(f=>{tc[f.facility_type]=(tc[f.facility_type]||0)+1});console.log('[FTP] Type breakdown:',JSON.stringify(tc))}
+        currentFacilities=data||[];dlog('RPC returned '+currentFacilities.length+' facilities');
+        if(currentFacilities.length>0){const tc={};currentFacilities.forEach(f=>{tc[f.facility_type]=(tc[f.facility_type]||0)+1});dlog('Type breakdown:',JSON.stringify(tc))}
         renderMarkers(currentFacilities);updateStats(currentFacilities);
         const ov=document.getElementById('map-empty-overlay');if(ov&&currentFacilities.length>0)ov.remove();
         if(!currentFacilities.length)showEmptyState('no-results');
-        }catch(e){if(e.name!=='AbortError'){console.error('[FTP] RPC failed:',e);showErrorState(e)}}finally{showLoading(false)}
+        }catch(e){if(e.name!=='AbortError'){derr('RPC failed:',e);showErrorState(e)}}finally{showLoading(false)}
     }
 
     function renderMarkers(facs){
@@ -398,27 +433,27 @@
         if(isMobile)m.on('click',()=>openFacilityDetail(f.facility_id));
         else{m.bindPopup(buildPopup(f),{maxWidth:240});m.on('click',()=>openFacilityDetail(f.facility_id))}
         return m}).filter(Boolean);
-        console.log('[FTP] renderMarkers:',markers.length);clusterLayer.addLayers(markers);
+        dlog('renderMarkers:',markers.length);clusterLayer.addLayers(markers);
     }
 
     function buildPopup(f){const s=f.final_score!=null?f.final_score.toFixed(1):'—';return'<div><strong>'+escapeHtml(f.facility_name||'')+'</strong><br><span style="color:var(--text-secondary);font-size:11px">'+escapeHtml(TYPE_LABEL[f.facility_type]||'')+'</span><br><span style="display:inline-block;padding:2px 8px;margin-top:4px;border-radius:10px;font-size:11px;font-weight:600;background:'+classColor(f.score_classification)+';color:#2C3E50">'+s+' · '+escapeHtml(f.score_classification||'Unrated')+'</span></div>'}
     function updateStats(rows){const sc=rows.filter(r=>r.final_score!=null);document.getElementById('total-count').textContent=rows.length.toLocaleString();document.getElementById('avg-score').textContent=sc.length>0?(sc.reduce((s,r)=>s+r.final_score,0)/sc.length).toFixed(1):'—'}
 
-    function showEmptyState(reason){const el=document.getElementById('map-empty-overlay');if(el)el.remove();if(currentFacilities.length>0)return;const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08)';if(reason==='no-types')o.innerHTML='<i class="fas fa-filter"></i><h4>No types selected</h4><p>Enable at least one facility type.</p>';else o.innerHTML='<i class="fas fa-search"></i><h4>No facilities found</h4><p>Try zooming out or adjusting filters.</p><button class="clear-btn" onclick="clearAllFilters()">Clear Filters</button>';document.getElementById('map-page').appendChild(o)}
-    function showErrorState(err){const el=document.getElementById('map-empty-overlay');if(el)el.remove();const o=document.createElement('div');o.id='map-empty-overlay';o.className='error-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08)';o.innerHTML='<i class="fas fa-triangle-exclamation"></i><h4>Unable to load</h4><p>'+escapeHtml(err.message||'Error')+'</p><button class="retry-btn" onclick="onViewChange();this.closest(\'.error-state\').remove()">Retry</button>';document.getElementById('map-page').appendChild(o)}
+    function showEmptyState(reason){const el=document.getElementById('map-empty-overlay');if(el)el.remove();if(currentFacilities.length>0)return;const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';if(reason==='no-types')o.innerHTML='<i class="fas fa-filter"></i><h4>No types selected</h4><p>Enable at least one facility type.</p>';else o.innerHTML='<i class="fas fa-search"></i><h4>No facilities found</h4><p>Try zooming out or adjusting filters.</p><button class="clear-btn" type="button" onclick="clearAllFilters()">Clear Filters</button>';document.getElementById('map-page').appendChild(o)}
+    function showErrorState(err){const el=document.getElementById('map-empty-overlay');if(el)el.remove();const o=document.createElement('div');o.id='map-empty-overlay';o.className='error-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';o.innerHTML='<i class="fas fa-triangle-exclamation"></i><h4>Unable to load</h4><p>'+escapeHtml(err.message||'Error')+'</p><button class="retry-btn" type="button" onclick="onViewChange();this.closest(\'.error-state\').remove()">Retry</button>';document.getElementById('map-page').appendChild(o)}
     function clearAllFilters(){activeTypes=new Set(FACILITY_TYPES.map(t=>t.value));Object.keys(activeSpecialties).forEach(k=>activeSpecialties[k]=false);syncChips();const o=document.getElementById('map-empty-overlay');if(o)o.remove();onViewChange()}
     function showLoading(a){const el=document.getElementById('query-loading');if(a)el.classList.add('active');else el.classList.remove('active')}
 
     async function openFacilityDetail(fid){
         openFacilityId=fid;pushUrlState(false);document.title='Loading… — ForThePatient';
-        if(isMobile){document.getElementById('detail-sheet-body').innerHTML=buildSkeletonHtml();setSheetSnap('detail-sheet','half')}
+        if(isMobile){document.getElementById('detail-sheet-body').innerHTML=buildSkeletonHtml();openBottomSheet('half')}
         else{const p=document.getElementById('info-panel');document.getElementById('facility-info-content').innerHTML=buildSkeletonHtml();p.classList.add('active')}
         const ov=document.getElementById('map-empty-overlay');if(ov)ov.remove();
         try{const{data,error}=await sb.rpc('facility_detail',{p_facility_id:fid});if(error)throw error;if(!data)throw new Error('No data');
         const html=buildFacilityDetailHtml(data);
         if(isMobile)document.getElementById('detail-sheet-body').innerHTML=html;else document.getElementById('facility-info-content').innerHTML=html;
         const f=data.facility||data;const s=f.final_score!=null?f.final_score.toFixed(1):'';document.title=(f.facility_name||'Facility')+' — Quality Score'+(s?' '+s:'')+' | ForThePatient';
-        }catch(e){console.error('detail failed',e);const eh='<div class="error-state"><i class="fas fa-triangle-exclamation"></i><h4>Could not load</h4><p>'+escapeHtml(e.message||'')+'</p><button class="retry-btn" onclick="openFacilityDetail(\''+escapeHtml(fid)+'\')">Retry</button></div>';if(isMobile)document.getElementById('detail-sheet-body').innerHTML=eh;else document.getElementById('facility-info-content').innerHTML=eh}
+        }catch(e){derr('detail failed',e);const eh='<div class="error-state"><i class="fas fa-triangle-exclamation"></i><h4>Could not load</h4><p>'+escapeHtml(e.message||'')+'</p><button class="retry-btn" type="button" onclick="openFacilityDetail(\''+escapeHtml(fid)+'\')">Retry</button></div>';if(isMobile)document.getElementById('detail-sheet-body').innerHTML=eh;else document.getElementById('facility-info-content').innerHTML=eh}
     }
 
     function buildSkeletonHtml(){return'<div class="facility-info" style="padding-top:14px"><div style="display:flex;justify-content:flex-end;gap:4px;margin-bottom:8px"><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div></div><div class="skeleton-block skeleton-line w70"></div><div class="skeleton-block skeleton-line w40" style="height:8px;margin-bottom:14px"></div><div style="display:flex;gap:14px;align-items:center;margin-bottom:20px"><div class="skeleton-block skeleton-circle"></div><div style="flex:1"><div class="skeleton-block skeleton-line w50"></div><div class="skeleton-block skeleton-line w40" style="height:8px"></div></div></div><div class="skeleton-block skeleton-line w40" style="height:8px;margin-bottom:14px"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div style="margin-top:18px"><div class="skeleton-block skeleton-line w70"></div><div class="skeleton-block skeleton-line w50"></div></div></div>'}
@@ -431,10 +466,16 @@
         const bHtml=badges.length?'<div class="specialty-badges">'+badges.map(b=>'<span class="spec-badge">'+escapeHtml(b)+'</span>').join('')+'</div>':'';
         const eHtml=enf.length?'<div class="enforcement-block"><div class="enforcement-title"><i class="fas fa-gavel"></i> '+enf.length+' regulatory action'+(enf.length===1?'':'s')+'</div>'+enf.slice(0,5).map(e=>'<div class="enforcement-amt">'+escapeHtml(e.penalty_type||'Penalty')+(e.amount?' · $'+Number(e.amount).toLocaleString():'')+(e.penalty_date?' · '+escapeHtml(String(e.penalty_date).slice(0,10)):'')+'</div>').join('')+(enf.length>5?'<div class="enforcement-amt">+ '+(enf.length-5)+' more</div>':'')+'</div>':'';
         const cmsLine=stars?'<span class="cms-stars">CMS overall: '+'<i class="fas fa-star star-icon"></i>'.repeat(Math.round(stars))+' '+stars+'/5</span>':'';
-        return'<div class="facility-info"><div class="detail-header-actions"><button class="detail-action-btn" onclick="copyFacilityLink(\''+escapeHtml(f.facility_id)+'\')" aria-label="Copy link" title="Copy link"><i class="fas fa-link"></i></button><button class="detail-action-btn" onclick="shareFacility(\''+escapeHtml(f.facility_id)+'\',\''+escapeHtml(f.facility_name)+'\')" aria-label="Share" title="Share"><i class="fas fa-share-nodes"></i></button><button class="detail-action-btn" onclick="togglePinPanel()" aria-label="Pin" title="Pin"><i class="fas fa-thumbtack"></i></button><button class="detail-action-btn" onclick="closeFacilityInfo()" aria-label="Close" title="Close"><i class="fas fa-times"></i></button></div><div class="facility-header"><h2 class="facility-name">'+escapeHtml(f.facility_name||'')+'</h2><div class="facility-type-line">'+escapeHtml(TYPE_LABEL[f.facility_type]||f.facility_type||'')+'</div><div class="score-block"><div class="score-circle '+(cls==='Unrated'?'unrated':'')+'" style="background:'+classColor(cls)+'">'+score+'</div><div class="score-meta"><span class="classification-badge '+classBadgeClass(cls)+'" style="background:'+classColor(cls)+'">'+escapeHtml(cls)+'</span><span class="score-out-of">FTP score · 10-point scale</span>'+cmsLine+'</div></div>'+bHtml+'</div><h3 class="section-header">Component breakdown</h3>'+compHtml+eHtml+'<div class="addr-block">'+(f.address?'<div><i class="fas fa-map-marker-alt"></i>'+escapeHtml(f.address||'')+'</div>':'')+'<div style="padding-left:20px">'+escapeHtml(f.city||'')+(f.city?', ':'')+escapeHtml(f.state||'')+' '+escapeHtml(f.zip_code||'')+'</div>'+(f.phone?'<div><i class="fas fa-phone"></i>'+escapeHtml(f.phone)+'</div>':'')+'</div><a href="https://maps.google.com/?q='+f.latitude+','+f.longitude+'" target="_blank" rel="noopener noreferrer" class="directions-btn">Get Directions</a><div class="print-methodology-url">Methodology: https://forthepatient.org/methodology</div></div>';
+        return'<div class="facility-info"><div class="detail-header-actions"><button class="detail-action-btn" type="button" onclick="copyFacilityLink(\''+escapeHtml(f.facility_id)+'\')" aria-label="Copy link" title="Copy link"><i class="fas fa-link"></i></button><button class="detail-action-btn" type="button" onclick="shareFacility(\''+escapeHtml(f.facility_id)+'\',\''+escapeHtml(f.facility_name)+'\')" aria-label="Share" title="Share"><i class="fas fa-share-nodes"></i></button><button class="detail-action-btn" type="button" data-pin onclick="togglePinPanel()" aria-label="Pin" title="Pin"><i class="fas fa-thumbtack"></i></button><button class="detail-action-btn" type="button" onclick="closeFacilityInfo()" aria-label="Close" title="Close"><i class="fas fa-times"></i></button></div><div class="facility-header"><h2 class="facility-name">'+escapeHtml(f.facility_name||'')+'</h2><div class="facility-type-line">'+escapeHtml(TYPE_LABEL[f.facility_type]||f.facility_type||'')+'</div><div class="score-block"><div class="score-circle '+(cls==='Unrated'?'unrated':'')+'" style="background:'+classColor(cls)+'">'+score+'</div><div class="score-meta"><span class="classification-badge '+classBadgeClass(cls)+'" style="background:'+classColor(cls)+'">'+escapeHtml(cls)+'</span><span class="score-out-of">FTP score · 10-point scale</span>'+cmsLine+'</div></div>'+bHtml+'</div><h3 class="section-header">Component breakdown</h3>'+compHtml+eHtml+'<div class="addr-block">'+(f.address?'<div><i class="fas fa-map-marker-alt"></i>'+escapeHtml(f.address||'')+'</div>':'')+'<div style="padding-left:20px">'+escapeHtml(f.city||'')+(f.city?', ':'')+escapeHtml(f.state||'')+' '+escapeHtml(f.zip_code||'')+'</div>'+(f.phone?'<div><i class="fas fa-phone"></i>'+escapeHtml(f.phone)+'</div>':'')+'</div><a href="https://maps.google.com/?q='+f.latitude+','+f.longitude+'" target="_blank" rel="noopener noreferrer" class="directions-btn">Get Directions</a><div class="print-methodology-url">Methodology: https://forthepatient.org/methodology</div></div>';
     }
 
-    function closeFacilityInfo(){openFacilityId=null;document.title='For The Patient — Healthcare Quality Map';if(isMobile)setSheetSnap('detail-sheet',0);else document.getElementById('info-panel').classList.remove('active','pinned');pushUrlState(true)}
+    function closeFacilityInfo(){
+        openFacilityId=null;
+        document.title='For The Patient — Healthcare Quality Map';
+        if(isMobile)closeBottomSheet();
+        else document.getElementById('info-panel').classList.remove('active','pinned');
+        pushUrlState(true);
+    }
     function copyFacilityLink(id){const url=location.origin+location.pathname+'?fid='+encodeURIComponent(id);navigator.clipboard.writeText(url).then(()=>{const b=document.querySelector('.detail-action-btn[onclick*="copyFacilityLink"]');if(b){const i=b.querySelector('i');i.className='fas fa-check';setTimeout(()=>{i.className='fas fa-link'},1500)}}).catch(()=>{})}
     function shareFacility(id,name){const url=location.origin+location.pathname+'?fid='+encodeURIComponent(id);if(navigator.share)navigator.share({title:name+' — Quality Score | ForThePatient',url}).catch(()=>{});else copyFacilityLink(id)}
     function togglePinPanel(){const p=document.getElementById('info-panel');detailPanelPinned=!detailPanelPinned;p.classList.toggle('pinned',detailPanelPinned);if(detailPanelPinned)p.style.width='';setTimeout(()=>map.invalidateSize(),350)}
@@ -442,7 +483,7 @@
     function wireNameSearch(){
         const input=document.getElementById('name-search'),results=document.getElementById('name-results');if(!input||!results)return;let kbIdx=-1;
         const search=debounce(async()=>{const q=input.value.trim();if(q.length<2){results.classList.remove('active');input.setAttribute('aria-expanded','false');return}if(!isOnline)return;
-        try{const{data,error}=await sb.rpc('search_facilities_by_name',{p_query:q,p_limit:12});if(error)throw error;renderNameResults(data||[],results);input.setAttribute('aria-expanded','true');kbIdx=-1}catch(e){console.error('search failed',e)}},250);
+        try{const{data,error}=await sb.rpc('search_facilities_by_name',{p_query:q,p_limit:12});if(error)throw error;renderNameResults(data||[],results);input.setAttribute('aria-expanded','true');kbIdx=-1}catch(e){derr('search failed',e)}},250);
         input.addEventListener('input',search);
         input.addEventListener('focus',()=>{if(results.children.length>0){results.classList.add('active');input.setAttribute('aria-expanded','true')}});
         input.addEventListener('keydown',e=>{const items=results.querySelectorAll('.name-result-item');if(e.key==='ArrowDown'){e.preventDefault();kbIdx=Math.min(kbIdx+1,items.length-1);updateKbActive(items,kbIdx)}else if(e.key==='ArrowUp'){e.preventDefault();kbIdx=Math.max(kbIdx-1,-1);updateKbActive(items,kbIdx)}else if(e.key==='Enter'&&kbIdx>=0&&items[kbIdx]){e.preventDefault();items[kbIdx].click()}else if(e.key==='Escape'){results.classList.remove('active');input.setAttribute('aria-expanded','false')}});
@@ -458,22 +499,121 @@
 
     function wireResizeHandle(){const h=document.getElementById('resize-handle'),p=document.getElementById('info-panel');if(!h||!p)return;let sx,sw;function md(e){e.preventDefault();sx=e.clientX;sw=p.offsetWidth;document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu)}function mm(e){p.style.width=Math.max(320,Math.min(600,sw+(sx-e.clientX)))+'px'}function mu(){document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu)}h.addEventListener('mousedown',md)}
 
-    function showMap(){document.getElementById('map-page').style.display='block';document.getElementById('about-page').classList.remove('active');document.querySelectorAll('.nav-btn').forEach(l=>l.classList.remove('active'));document.querySelectorAll('.nav-btn')[0].classList.add('active');setTimeout(()=>map&&map.invalidateSize(),100)}
-    function showAbout(){document.getElementById('map-page').style.display='none';document.getElementById('about-page').classList.add('active');document.querySelectorAll('.nav-btn').forEach(l=>l.classList.remove('active'));document.querySelectorAll('.nav-btn')[1].classList.add('active')}
     function toggleTheme(){currentTheme=currentTheme==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',currentTheme);try{localStorage.setItem('theme',currentTheme)}catch(e){}const btn=document.getElementById('theme-toggle-btn');btn.classList.toggle('active',currentTheme==='dark');btn.setAttribute('aria-checked',currentTheme==='dark');btn.querySelector('.toggle-slider i').className=currentTheme==='dark'?'fas fa-moon':'fas fa-sun';document.querySelector('meta[name="theme-color"]').content=currentTheme==='dark'?'#1A1F36':'#FDF8F0';map.eachLayer(l=>{if(l instanceof L.TileLayer)map.removeLayer(l)});L.tileLayer(currentTheme==='dark'?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png':'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; CARTO &middot; CMS public data',subdomains:'abcd',maxZoom:20}).addTo(map);pushUrlState(true)}
 
-    function showDetailSheet(fid){document.getElementById('detail-sheet-body').innerHTML=buildSkeletonHtml();setSheetSnap('detail-sheet','half')}
-    function setupBottomSheets(){setupSheet('detail-sheet','detail-sheet-handle')}
-    function setupSheet(sid,hid){const sheet=document.getElementById(sid),handle=document.getElementById(hid);if(!sheet||!handle)return;const snaps={peek:64,half:innerHeight*.5,full:innerHeight*.9};let cs='peek',sY,sH,drag=false;function setH(h){sheet.style.height=Math.max(0,h)+'px'}handle.addEventListener('touchstart',e=>{drag=true;sY=e.touches[0].clientY;sH=sheet.offsetHeight;sheet.style.transition='none'},{passive:true});handle.addEventListener('touchmove',e=>{if(!drag)return;setH(Math.min(snaps.full,Math.max(0,sH+(sY-e.touches[0].clientY))))},{passive:true});handle.addEventListener('touchend',()=>{drag=false;sheet.style.transition='height .3s cubic-bezier(.25,.1,.25,1)';const h=sheet.offsetHeight;const d=Object.entries(snaps).map(([k,v])=>[k,Math.abs(h-v)]);d.push(['closed',h]);d.sort((a,b)=>a[1]-b[1]);const best=d[0][0];if(best==='closed')setH(0);else setH(snaps[best]);cs=best;haptic(10)},{passive:true});sheet._setSnap=(snap)=>{sheet.style.transition='height .3s cubic-bezier(.25,.1,.25,1)';const ts={peek:64,half:innerHeight*.5,full:innerHeight*.9};if(snap===0||snap==='closed')setH(0);else setH(ts[snap]||64);cs=snap}}
-    function setSheetSnap(sid,snap){const s=document.getElementById(sid);if(s&&s._setSnap)s._setSnap(snap)}
+    // ─── Bottom sheet (mobile only) ──────────────────────────────────────────
+    function getSnapHeights(){const vh=window.innerHeight;return{half:Math.round(vh*0.5),full:Math.round(vh*0.9)}}
+    function applySheetHeight(h,animate){const sheet=document.getElementById('detail-sheet');if(!sheet)return;sheet.style.transition=animate?'height .3s cubic-bezier(.25,.1,.25,1)':'none';sheet.style.height=Math.max(0,h)+'px'}
+    function openBottomSheet(snap){
+        const sheet=document.getElementById('detail-sheet');if(!sheet)return;
+        const heights=getSnapHeights();const h=heights[snap]||heights.half;
+        sheetState=(snap==='full')?'full':'half';
+        sheet.setAttribute('aria-hidden','false');
+        applySheetHeight(h,true);
+    }
+    function closeBottomSheet(){
+        const sheet=document.getElementById('detail-sheet');if(!sheet)return;
+        if(sheetState==='closed'){applySheetHeight(0,false);return}
+        sheetState='closed';
+        sheet.setAttribute('aria-hidden','true');
+        applySheetHeight(0,true);
+        setTimeout(()=>{
+            if(sheetState==='closed'){
+                const body=document.getElementById('detail-sheet-body');
+                if(body)body.innerHTML='';
+            }
+        },350);
+    }
+    function setupBottomSheetHandle(){
+        const sheet=document.getElementById('detail-sheet');
+        const oldHandle=document.getElementById('detail-sheet-handle');
+        if(!sheet||!oldHandle)return;
+        // Replace the handle with a fresh clone to drop any stale listeners.
+        const handle=oldHandle.cloneNode(false);
+        oldHandle.parentNode.replaceChild(handle,oldHandle);
+        let sY,sH,drag=false;
+        handle.addEventListener('touchstart',e=>{
+            drag=true;sY=e.touches[0].clientY;sH=sheet.offsetHeight;
+            sheet.style.transition='none';
+        },{passive:true});
+        handle.addEventListener('touchmove',e=>{
+            if(!drag)return;
+            const heights=getSnapHeights();
+            const newH=Math.min(heights.full,Math.max(0,sH+(sY-e.touches[0].clientY)));
+            applySheetHeight(newH,false);
+        },{passive:true});
+        handle.addEventListener('touchend',()=>{
+            if(!drag)return;drag=false;
+            const heights=getSnapHeights();
+            const h=sheet.offsetHeight;
+            const cands=[['closed',0],['half',heights.half],['full',heights.full]];
+            cands.sort((a,b)=>Math.abs(h-a[1])-Math.abs(h-b[1]));
+            const best=cands[0][0];
+            if(best==='closed'){
+                openFacilityId=null;
+                document.title='For The Patient — Healthcare Quality Map';
+                pushUrlState(true);
+                closeBottomSheet();
+            }else{
+                openBottomSheet(best);
+            }
+            haptic(10);
+        },{passive:true});
+
+        // Wire the always-on close button (idempotent via _wired flag).
+        const closeBtn=document.getElementById('sheet-close-btn');
+        if(closeBtn&&!closeBtn._wired){
+            closeBtn._wired=true;
+            closeBtn.addEventListener('click',()=>{
+                openFacilityId=null;
+                document.title='For The Patient — Healthcare Quality Map';
+                pushUrlState(true);
+                closeBottomSheet();
+            });
+        }
+    }
+    // Compatibility shim — older code paths still call setSheetSnap.
+    function setSheetSnap(sid,snap){if(sid!=='detail-sheet')return;if(snap===0||snap==='closed')closeBottomSheet();else openBottomSheet(snap==='full'?'full':'half')}
+
+    function handleViewportResize(){
+        checkMobile();
+        if(isMobile){
+            setupBottomSheetHandle();
+            if(sheetState!=='closed'){
+                const heights=getSnapHeights();
+                applySheetHeight(heights[sheetState]||heights.half,false);
+            }
+        }else if(sheetState!=='closed'){
+            // Crossed mobile->desktop while open: tear sheet down.
+            sheetState='closed';
+            applySheetHeight(0,false);
+            const body=document.getElementById('detail-sheet-body');if(body)body.innerHTML='';
+        }
+        if(map)map.invalidateSize();
+    }
 
     function setupOfflineDetection(){const t=document.getElementById('offline-toast');window.addEventListener('offline',()=>{isOnline=false;t.classList.add('active')});window.addEventListener('online',()=>{isOnline=true;t.classList.remove('active');onViewChange()})}
     function setupKeyboardShortcuts(){document.addEventListener('keydown',e=>{if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&!e.target.closest('input,select,textarea')){e.preventDefault();document.getElementById('name-search')?.focus()}if(e.key==='Escape'&&openFacilityId)closeFacilityInfo()})}
 
     window.addEventListener('load',()=>{
-        checkMobile();window.addEventListener('resize',debounce(()=>{checkMobile();if(isMobile)setupBottomSheets()},200));
-        const u=getUrlState();const saved=u.theme||(function(){try{return localStorage.getItem('theme')}catch(e){return null}})()||'light';currentTheme=saved;document.documentElement.setAttribute('data-theme',currentTheme);if(currentTheme==='dark'){const b=document.getElementById('theme-toggle-btn');b.classList.add('active');b.setAttribute('aria-checked','true');b.querySelector('.toggle-slider i').className='fas fa-moon';document.querySelector('meta[name="theme-color"]').content='#1A1F36'}
-        initMap();setupOfflineDetection();setupKeyboardShortcuts();if(isMobile)setupBottomSheets();
+        checkMobile();
+        const debouncedResize=debounce(handleViewportResize,150);
+        window.addEventListener('resize',debouncedResize);
+        window.addEventListener('orientationchange',()=>{setTimeout(handleViewportResize,250)});
+        const u=getUrlState();
+        const saved=u.theme||(function(){try{return localStorage.getItem('theme')}catch(e){return null}})()||'light';
+        currentTheme=saved;
+        document.documentElement.setAttribute('data-theme',currentTheme);
+        if(currentTheme==='dark'){
+            const b=document.getElementById('theme-toggle-btn');
+            b.classList.add('active');b.setAttribute('aria-checked','true');
+            b.querySelector('.toggle-slider i').className='fas fa-moon';
+            document.querySelector('meta[name="theme-color"]').content='#1A1F36';
+        }
+        initMap();
+        setupOfflineDetection();
+        setupKeyboardShortcuts();
+        if(isMobile)setupBottomSheetHandle();
     });
     </script>
 </body>
