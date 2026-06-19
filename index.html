@@ -1,7 +1,32 @@
 <!--
-  ForThePatient.org v5.0 (Session K5-MOBILE — June 2026)
-  Mobile structural redesign: "home sheet" + List/Map tab (approved layout A+).
-  Changelog vs v4.3:
+  ForThePatient.org v5.1 (Session K5-MOBILE-FT — June 2026)
+  Mobile fine-tuning + on-device QA. POLISH ONLY — no re-architecture.
+  The v5.0 sheet/modes/snaps/List-Map toggle/theme toggle are preserved.
+  Changelog vs v5.0:
+    FT-1: "NEAR ME" BEHAVIOR (Known Issues #14; wireNearMe). Rewritten as a
+          small state machine with a single in-flight request guard, so rapid
+          repeat taps can no longer stack getCurrentPosition calls or leave the
+          spinner stuck. The spinner + aria-busy are set the instant the button
+          is tapped and reliably restored on EVERY exit path (success, denial,
+          timeout, slow-then-granted). On success: recenter at zoom 11, snap to
+          half, re-render the nearby list. On denial: show the location-off
+          guide (Invariant #11 silent-map-fallback preserved). On the 4s TIMEOUT
+          (slow GPS, Q-42 = explicit-retry): keep a background watchPosition
+          alive so a late fix still recenters automatically, AND show an explicit
+          "Still finding your location… / Try again" affordance in the sheet.
+    FT-2: NEARBY LIST + SEARCH DROPDOWN DISPLAY (Known Issues #15). Hardened for
+          320/360/390/414px: list rows now truncate the NAME first (ellipsis)
+          while the distance and FLAGGED pill stay pinned right and never wrap
+          (flex 0 0 auto + min-widths). The search dropdown (#sheet-search-results)
+          now layers above the chips/stats/list (z-index + card bg + shadow) and
+          scrolls when long (max-height) with its existing explicit empty state.
+          List cap stays at 60 with the "Showing the nearest 60 of N" footer.
+    FT-3: No backend, scoring, schema, or methodology changes. No new
+          dependencies, no new colors. B-ENF-FLAG fields still surfaced only as
+          the minimal FLAGGED pill — severity-weighted markers and percentile
+          copy remain ENF-VIZ / TRANSLATE-1 (Decision 127). Desktop (>768px)
+          byte-for-byte unchanged (Hard Invariant #29).
+  v5.0 changelog (Session K5-MOBILE) carried forward:
     K5-1: MOBILE CONTROL MODEL INVERTED. The cramped floating top filter bar
           (search + chips + stats) is hidden on phones (<=768px). Its job moves
           into a persistent bottom "home sheet" that rests at a low PEEK and
@@ -324,7 +349,7 @@
         .sheet-nearme:hover{opacity:.92}
         .sheet-nearme i{font-size:.85rem}
         .sheet-scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:6px 14px calc(18px + var(--safe-bottom));padding-left:max(14px,calc(14px + var(--safe-left)));padding-right:max(14px,calc(14px + var(--safe-right)))}
-        .sheet-search-results{display:none;margin-bottom:8px;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+        .sheet-search-results{display:none;position:relative;z-index:5;margin-bottom:8px;border:1px solid var(--border);border-radius:9px;overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:min(46vh,300px);background:var(--card-bg);box-shadow:0 6px 20px rgba(0,0,0,.12)}
         .sheet-search-results.active{display:block}
         .sheet-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
         .sheet-chip{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border:1px solid var(--border);border-radius:16px;font-size:.78rem;font-weight:600;background:var(--card-bg);color:var(--text-secondary);cursor:pointer;font-family:inherit;min-height:36px;transition:all .15s}
@@ -337,16 +362,16 @@
         .sheet-state-pill.active{display:inline-flex}
         .sheet-state-pill .x{font-size:.68rem;width:15px;height:15px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,255,255,.2)}
         .sheet-list{display:flex;flex-direction:column}
-        .sheet-frow{display:flex;align-items:center;gap:11px;padding:11px 2px;border-bottom:1px solid var(--border);cursor:pointer;text-align:left;width:100%;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+        .sheet-frow{display:flex;align-items:center;gap:9px;padding:11px 2px;border-bottom:1px solid var(--border);cursor:pointer;text-align:left;width:100%;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
         .sheet-frow:last-of-type{border-bottom:none}
         .sheet-frow:active{background:var(--hover-bg)}
         .sheet-frow .sc{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.74rem;font-weight:700;color:#2C3E50;flex-shrink:0}
         .sheet-frow .sc.unrated{color:var(--text-secondary)}
-        .sheet-frow .fmeta{flex:1;min-width:0}
-        .sheet-frow .fnm{font-size:.82rem;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .sheet-frow .fsub{font-size:.7rem;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .sheet-frow .fdist{font-size:.7rem;color:var(--text-secondary);font-weight:600;flex-shrink:0;font-variant-numeric:tabular-nums}
-        .sheet-flag{font-size:.56rem;font-weight:700;color:#fff;background:var(--cls-poor);border-radius:5px;padding:2px 6px;flex-shrink:0;letter-spacing:.03em}
+        .sheet-frow .fmeta{flex:1 1 auto;min-width:0}
+        .sheet-frow .fnm{display:block;font-size:.82rem;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .sheet-frow .fsub{display:block;font-size:.7rem;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .sheet-frow .fdist{font-size:.7rem;color:var(--text-secondary);font-weight:600;flex:0 0 auto;font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right;min-width:42px}
+        .sheet-flag{font-size:.56rem;font-weight:700;color:#fff;background:var(--cls-poor);border-radius:5px;padding:2px 6px;flex:0 0 auto;letter-spacing:.03em;white-space:nowrap}
         .sheet-guide{padding:28px 12px;text-align:center;color:var(--text-secondary)}
         .sheet-guide i{font-size:1.6rem;color:var(--border);margin-bottom:10px;display:block}
         .sheet-guide h4{font-size:.92rem;font-weight:700;color:var(--text-secondary);margin-bottom:5px}
@@ -730,24 +755,60 @@
         const mapOn=(sheetSnap==='peek');
         t.querySelectorAll('button').forEach(b=>{const on=(b.dataset.view==='map')===mapOn;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on?'true':'false')});
     }
+    // Near me (mobile). Single in-flight request at a time; spinner set on tap and
+    // restored on EVERY exit path. Within 4s (Invariant #11) a denial shows the
+    // location-off guide. On a 4s TIMEOUT we keep silently watching in the
+    // background (so a slow-but-eventually-granted fix still recenters) AND surface
+    // an explicit "still trying… / retry" affordance (Q-42: explicit-retry).
+    let nearMeBusy=false,nearMeWatchId=null;
+    function setNearMeBusy(b,on){
+        nearMeBusy=on;
+        const i=b.querySelector('i');
+        if(on){if(!b._iconPrev)b._iconPrev=i?i.className:'';if(i)i.className='fas fa-spinner fa-spin';b.disabled=true;b.setAttribute('aria-busy','true');}
+        else{if(i&&b._iconPrev)i.className=b._iconPrev;b._iconPrev='';b.disabled=false;b.removeAttribute('aria-busy');}
+    }
+    function clearNearMeWatch(){if(nearMeWatchId!=null&&navigator.geolocation){try{navigator.geolocation.clearWatch(nearMeWatchId)}catch(e){}}nearMeWatchId=null}
+    function applyNearMeFix(lat,lng){
+        userLocation={lat,lng};
+        if(filteredState){filteredState=null;updateStateFilterIndicator()}
+        if(map)map.setView([lat,lng],11);
+        setSheetSnap('half');
+        if(isMobile)renderSheetList();
+    }
+    function startNearMe(){
+        const b=document.getElementById('sheet-nearme');if(!b)return;
+        if(nearMeBusy)return;                              // in-flight guard: ignore repeat taps
+        haptic(10);
+        if(!navigator.geolocation){showSheetGuide('location-off');setSheetSnap('half');return}
+        clearNearMeWatch();
+        setNearMeBusy(b,true);
+        let settled=false;
+        const done=fn=>{if(settled)return;settled=true;setNearMeBusy(b,false);if(fn)fn()};
+        navigator.geolocation.getCurrentPosition(
+            pos=>{clearNearMeWatch();done(()=>applyNearMeFix(pos.coords.latitude,pos.coords.longitude))},
+            err=>{
+                // code 3 = TIMEOUT: GPS may still resolve. Keep a background watch and
+                // offer an explicit retry, while honoring the silent map fallback.
+                if(err&&err.code===3){
+                    done(()=>{setSheetSnap('half');showNearMePending();
+                        if(navigator.geolocation&&nearMeWatchId==null){
+                            nearMeWatchId=navigator.geolocation.watchPosition(
+                                pos=>{clearNearMeWatch();applyNearMeFix(pos.coords.latitude,pos.coords.longitude)},
+                                ()=>{clearNearMeWatch()},
+                                {enableHighAccuracy:false,maximumAge:60000});
+                        }
+                    });
+                }else{
+                    // denial / position-unavailable: stop, explain, restore.
+                    clearNearMeWatch();done(()=>{showSheetGuide('location-off');setSheetSnap('half')});
+                }
+            },
+            {timeout:4000,maximumAge:60000}
+        );
+    }
     function wireNearMe(){
         const b=document.getElementById('sheet-nearme');if(!b||b._wired)return;b._wired=true;
-        b.addEventListener('click',()=>{
-            haptic(10);
-            const i=b.querySelector('i');const prev=i?i.className:'';
-            if(!navigator.geolocation){showSheetGuide('location-off');setSheetSnap('half');return}
-            if(i)i.className='fas fa-spinner fa-spin';
-            navigator.geolocation.getCurrentPosition(pos=>{
-                if(i)i.className=prev;
-                userLocation={lat:pos.coords.latitude,lng:pos.coords.longitude};
-                if(filteredState){filteredState=null;updateStateFilterIndicator()}
-                map.setView([userLocation.lat,userLocation.lng],11);
-                setSheetSnap('half');
-            },()=>{
-                if(i)i.className=prev;
-                showSheetGuide('location-off');setSheetSnap('half');
-            },{timeout:4000,maximumAge:60000});
-        });
+        b.addEventListener('click',startNearMe);
     }
     function wireSheetSearch(){
         const input=document.getElementById('sheet-search'),results=document.getElementById('sheet-search-results');if(!input||!results)return;
@@ -812,6 +873,13 @@
         else if(kind==='state-loading'){icon='fa-spinner fa-spin';h='Loading facilities…';p='One moment.';}
         else if(kind==='no-types'){icon='fa-filter';h='No types selected';p='Pick at least one facility type above to see results.';}
         wrap.innerHTML='<div class="sheet-guide"><i class="fas '+icon+'" aria-hidden="true"></i><h4>'+h+'</h4><p>'+p+'</p></div>'+sheetLinksHtml();
+    }
+    // Slow-GPS state: the 4s timeout fired but we're still listening in the
+    // background. Show progress + an explicit Retry (Q-42 explicit-retry).
+    function showNearMePending(){
+        const wrap=document.getElementById('sheet-list');if(!wrap)return;
+        wrap.innerHTML='<div class="sheet-guide"><i class="fas fa-location-crosshairs fa-fade" aria-hidden="true"></i><h4>Still finding your location…</h4><p>This can take a moment. We&rsquo;ll center the map automatically once your device responds — or you can search by name above.</p><button class="clear-btn" type="button" id="nearme-retry" style="margin-top:6px">Try again</button></div>'+sheetLinksHtml();
+        const r=document.getElementById('nearme-retry');if(r)r.addEventListener('click',()=>{clearNearMeWatch();startNearMe()});
     }
     function sheetLinksHtml(){return'<div class="sheet-links"><a href="/about">About</a><a href="/methodology">Methodology</a><a href="/medical-disclaimer">Disclaimer</a><a href="/dispute-process">Dispute</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>'}
     function setSheetContent(mode){
