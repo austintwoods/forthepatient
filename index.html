@@ -1,8 +1,43 @@
 <!--
-  ForThePatient.org v5.1 (Session K5-MOBILE-FT — June 2026)
-  Mobile fine-tuning + on-device QA. POLISH ONLY — no re-architecture.
-  The v5.0 sheet/modes/snaps/List-Map toggle/theme toggle are preserved.
-  Changelog vs v5.0:
+  ForThePatient.org v5.2 (Session ENF-VIZ — June 2026)
+  Enforcement visualization. Pure frontend; no backend/scoring/schema changes.
+  All B-ENF-FLAG data (has_active_enforcement, enforcement_severity gated in
+  nearby_facilities / ungated in facility_detail, hospital_enforcement[]) is
+  live + anon-verified — this session only RENDERS it.
+  Changelog vs v5.1:
+    EV-1: SEVERITY-WEIGHTED MAP MARKERS. Flagged facilities (has_active_enforcement)
+          get a colored RING around the score dot, weighted by the 4-tier
+          enforcement_severity {CRITICAL,SEVERE,MODERATE,MINOR}. The dot fill keeps
+          the score-classification color (so the quality signal is unchanged); the
+          RING answers "is something wrong here". CRITICAL pulses (reduced-motion
+          aware) + loudest; MINOR is a thin subtle ring. To keep the ~10,311 flagged
+          markers from overwhelming the state view, MODERATE/MINOR rings only appear
+          at zoom >= 11; CRITICAL/SEVERE always show when flagged. Ring colors are
+          the documented classification palette (#E8A0A0/#F0B8A0/#F8D08A/#BDC3C7) —
+          NO new colors (Invariant #18). Still L.divIcon, never circleMarker (#7);
+          severity normalized in JS, colors hard-coded in the divIcon HTML (#8).
+          enforcement_severity is null for unflagged facilities → normal marker,
+          never treated as a category.
+    EV-2: DETAIL-CARD ENFORCEMENT. New buildEnforcementHtml() renders, after the
+          component breakdown: (a) a severity banner — "Under active enforcement ·
+          <severity>" when flagged; when NOT flagged but a facility.enforcement_severity
+          is present (the UNGATED expired label) a quiet "No active enforcement / a
+          past finding has expired" banner so an expired label is NEVER shown as
+          current; and (b) a "Survey findings (N)" history from hospital_enforcement[]
+          — per-survey date, level (Immediate jeopardy / Condition-level / Standard
+          from the 3-tier {critical,significant,minor}), a Current|Resolved status
+          from is_active, optional tag + description, sorted survey_date desc, first
+          4 shown with a Show-all toggle. Renders in BOTH the desktop side panel and
+          the mobile sheet detail mode (buildFacilityDetailHtml feeds both). All
+          enforcement text routed through escapeHtml (#15).
+    EV-3: MOBILE FLAGGED PILL is now severity-aware (Decision 127 allows ENF-VIZ to
+          upgrade it): the pill color tracks the 4-tier severity. Desktop popup gains
+          an "Active enforcement · <severity>" line.
+    EV-4: No backend, scoring, schema, or methodology-CODE changes. No new
+          dependencies. methodology.html updated separately (Known Issues #4).
+          Desktop (>768px) layout otherwise byte-for-byte unchanged (Hard Invariant
+          #29); sheet/modes/snaps/toggle/theme toggle preserved (#30).
+  v5.1 changelog (Session K5-MOBILE-FT) carried forward:
     FT-1: "NEAR ME" BEHAVIOR (Known Issues #14; wireNearMe). Rewritten as a
           small state machine with a single in-flight request guard, so rapid
           repeat taps can no longer stack getCurrentPosition calls or leave the
@@ -53,46 +88,17 @@
           list rather than dismissing the sheet. Legal links live at the foot
           of the home sheet (the floating footer bar is hidden on mobile).
     K5-6: Light/dark theme toggle retained in the header exactly as before.
-  v4.3 changelog (Session K3) carried forward:
-    K3-1: Early theme init script in <head> prevents dark-mode theme-color
-          flash on cold load. Persisted theme applied before body renders.
-    K3-2: "Method" nav link hidden at ≤380px viewports to prevent header
-          overflow on narrow devices (still accessible in footer bar).
-    K3-3: Empty state message is now state-filter-aware: shows
-          "No [type] in [state]" when filteredState is active.
-    K3-4: Cluster icon SVG uses JS-resolved theme colors instead of CSS
-          var() in attributes, ensuring correct rendering across all
-          browsers including Firefox. Theme toggle re-renders clusters.
-  v4.2 changes (Session K2) carried forward:
-    - Initial load defaults to a state-bubble view, not facility view:
-        * with geolocation: centered on user at zoom 6 (their state + neighbors)
-        * without geolocation: continental US at zoom 4
-    - Default facility-type selection narrowed to Hospitals only (others
-      remain available, just unselected).
-    - Specialty filter chips (ER/NICU/Trauma/Teaching/Cardiac Cath) removed
-      from the filter bar — that information is already on each facility's
-      detail card, and the chips were eating mobile real-estate.
-    - Stats inline ("X in view / avg Y") now visible on mobile, with the
-      static labels hidden on narrow screens to keep the row compact.
-    - State-scoped facility view: clicking a state bubble now constrains the
-      facility-mode fetch to that state only. Bleed-over from neighboring
-      states is filtered out client-side. A dismissible state-filter badge
-      shows in the filter bar; zooming back out to bubble view clears it.
-  v4.1 changes (Session K1) carried forward:
-    - Inline About page removed (now /about static page).
-    - Header Map/About converted to <a> anchors; logo wrapped in home anchor.
-    - Footer-bar visible on mobile portrait (hidden in landscape).
-    - Filter chip-scroll: mobile fade-mask affordance + safe-area inset.
-    - Search input bumped to 16px on mobile (kills iOS auto-zoom-on-focus).
-    - Bottom sheet rewrite: dedicated close button, dynamic snap recompute on
-      resize/rotate, listeners replaced via cloneNode, no more 64px peek-stuck.
-    - Pin button hidden on mobile (info-panel doesn't exist on mobile).
-    - Touch targets bumped to >=40px across nav, chips, action buttons.
-    - facility-info gains horizontal safe-area padding.
-    - Console output gated behind DEBUG flag (?debug=1 or localhost).
-    - Resize / orientationchange handler rebinds sheet handle and re-snaps.
-    - <=380px breakpoint added for narrow phones.
-    - Misc: leaflet attribution shrunk, theme-color set on load.
+  Earlier changelogs (v4.1 K1, v4.2 K2, v4.3 K3) trimmed from this header at
+  ENF-VIZ to keep the single file readable and under the 1,000-line code budget
+  (Hard Invariant #16 / Decision 131). The full per-session history lives in
+  SESSION_HANDOFF.md (Session Execution History) and in git. Summary of what
+  those sessions established and is still in force: state-bubble default view
+  + geolocation centering (K2); Hospitals-only default + specialty chips removed
+  (K2); client-side state scoping + dismissible state badge (K2); early <head>
+  theme init, JS-resolved cluster SVG colors, state-filter-aware empty state,
+  Method nav hidden <=380px (K3); 16px mobile inputs, >=40px touch targets,
+  DEBUG-gated console, resize/orientation re-snap, inline About removed,
+  header anchors (K1).
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -382,6 +388,58 @@
         .sheet-links a{font-size:.74rem;color:var(--text-secondary);text-decoration:none}
         .sheet-links a:hover{color:var(--accent)}
         .sheet-detail{display:flex;flex-direction:column;flex:1;min-height:0}
+        /* ── ENF-VIZ: enforcement markers + survey history ─────────────────── */
+        /* Marker ring: severity styles the RING (is something wrong here),
+           the dot fill keeps the score-classification color (the quality score).
+           Colors are the documented classification palette — no new colors. */
+        .ftp-flag{position:relative;display:flex;align-items:center;justify-content:center;border-radius:50%}
+        .ftp-flag .ftp-dot{position:relative;z-index:2}
+        .ftp-flag .enf-ring{position:absolute;inset:0;border-radius:50%;z-index:1}
+        .enf-ring.sev-critical{box-shadow:0 0 0 3px #E8A0A0,0 0 7px 2px rgba(232,160,160,.85)}
+        .enf-ring.sev-severe{box-shadow:0 0 0 3px #F0B8A0,0 0 5px 1px rgba(240,184,160,.7)}
+        .enf-ring.sev-moderate{box-shadow:0 0 0 2px #F8D08A}
+        .enf-ring.sev-minor{box-shadow:0 0 0 2px #BDC3C7}
+        @media(prefers-reduced-motion:no-preference){
+            .enf-ring.sev-critical{animation:enfPulse 2s ease-in-out infinite}
+        }
+        @keyframes enfPulse{0%,100%{box-shadow:0 0 0 3px #E8A0A0,0 0 6px 1px rgba(232,160,160,.55)}50%{box-shadow:0 0 0 3px #E8A0A0,0 0 9px 3px rgba(232,160,160,.95)}}
+        /* Detail card: enforcement banner + per-survey history */
+        .enf-banner{display:flex;align-items:flex-start;gap:10px;margin-top:14px;padding:12px 14px;border-radius:8px;font-size:.82rem;border:1px solid}
+        .enf-banner i{margin-top:1px;font-size:.95rem;flex-shrink:0}
+        .enf-banner .enf-banner-body{min-width:0}
+        .enf-banner .enf-banner-head{font-weight:700;color:var(--text-primary);margin-bottom:2px}
+        .enf-banner .enf-banner-sub{color:var(--text-secondary);font-size:.74rem;line-height:1.45}
+        .enf-banner.sev-critical{background:rgba(232,160,160,.16);border-color:rgba(232,160,160,.55)}
+        .enf-banner.sev-critical i{color:#C0392B}
+        .enf-banner.sev-severe{background:rgba(240,184,160,.16);border-color:rgba(240,184,160,.55)}
+        .enf-banner.sev-severe i{color:#CB6B3E}
+        .enf-banner.sev-moderate{background:rgba(248,208,138,.18);border-color:rgba(248,208,138,.6)}
+        .enf-banner.sev-moderate i{color:#B8860B}
+        .enf-banner.sev-minor{background:var(--hover-bg);border-color:var(--border)}
+        .enf-banner.sev-minor i{color:var(--text-secondary)}
+        .enf-banner.expired{background:var(--hover-bg);border-color:var(--border)}
+        .enf-banner.expired i{color:var(--text-secondary)}
+        .enf-history{margin-top:6px}
+        .enf-row{padding:9px 0;border-bottom:1px solid var(--border);font-size:.78rem}
+        .enf-row:last-child{border-bottom:none}
+        .enf-row-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+        .enf-date{font-weight:600;color:var(--text-primary);font-variant-numeric:tabular-nums}
+        .enf-tag{color:var(--text-secondary);font-size:.72rem}
+        .enf-level{font-size:.6rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:2px 6px;border-radius:5px;color:#2C3E50;white-space:nowrap}
+        .enf-level.lvl-critical{background:#E8A0A0}
+        .enf-level.lvl-significant{background:#F0B8A0}
+        .enf-level.lvl-minor{background:#F8D08A}
+        .enf-status{font-size:.6rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:2px 6px;border-radius:5px;white-space:nowrap}
+        .enf-status.current{background:var(--cls-poor);color:#fff}
+        .enf-status.resolved{background:var(--border);color:var(--text-secondary)}
+        .enf-desc{color:var(--text-secondary);margin-top:3px;line-height:1.45;overflow-wrap:anywhere}
+        .enf-more{font-size:.72rem;color:var(--text-secondary);margin-top:8px}
+        .enf-toggle{background:none;border:none;color:var(--accent);font-family:inherit;font-size:.74rem;font-weight:600;cursor:pointer;padding:8px 0 0;min-height:32px}
+        /* Mobile FLAGGED pill upgraded to severity-aware (Decision 127) */
+        .sheet-flag.sev-critical{background:#E8A0A0;color:#2C3E50}
+        .sheet-flag.sev-severe{background:#F0B8A0;color:#2C3E50}
+        .sheet-flag.sev-moderate{background:#F8D08A;color:#2C3E50}
+        .sheet-flag.sev-minor{background:#BDC3C7;color:#2C3E50}
         .print-methodology-url{display:none}
     </style>
 </head>
@@ -478,6 +536,13 @@
 
     function classColor(c){return CLASS_COLORS[c]||CLASS_COLORS.Unrated}
     function classBadgeClass(c){return(!c||c==='Unrated')?'unrated':''}
+    // ── ENF-VIZ: enforcement severity (facility-level 4-tier) ───────────────
+    // {CRITICAL,SEVERE,MODERATE,MINOR}. Drives the marker ring + flag pill.
+    const SEV_RANK={CRITICAL:4,SEVERE:3,MODERATE:2,MINOR:1};
+    const SEV_WORD={CRITICAL:'critical',SEVERE:'severe',MODERATE:'moderate',MINOR:'minor'};
+    function normSev(s){if(s==null)return null;const u=String(s).trim().toUpperCase();return SEV_RANK[u]?u:null}
+    // Per-survey level (3-tier {critical,significant,minor}, Decision 114).
+    const LVL_WORD={immediate_jeopardy:'critical',condition:'significant',standard:'minor',critical:'critical',significant:'significant',minor:'minor'};
     function debounce(fn,ms){let t;return function(...a){clearTimeout(t);t=setTimeout(()=>fn.apply(this,a),ms)}}
     function truthy(v){if(v===true)return true;if(v===false||v==null)return false;const s=String(v).toLowerCase();return s==='y'||s==='yes'||s==='true'||s==='1'}
     function escapeHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
@@ -654,9 +719,18 @@
 
     function renderMarkers(facs){
         clusterLayer.clearLayers();const ds=isMobile?14:12;
+        const z=map?map.getZoom():STATE_ZOOM;
         const markers=facs.map(f=>{if(f.latitude==null||f.longitude==null)return null;
         const color=classColor(f.score_classification);
-        const icon=L.divIcon({className:'',html:'<div class="ftp-dot" style="background:'+color+';width:'+ds+'px;height:'+ds+'px"></div>',iconSize:[ds,ds],iconAnchor:[ds/2,ds/2]});
+        const sev=f.has_active_enforcement?normSev(f.enforcement_severity):null;
+        // CRITICAL/SEVERE rings always show when flagged; MODERATE/MINOR only at
+        // closer zooms so 10k+ flagged markers don't overwhelm the state view.
+        const showRing=sev&&(SEV_RANK[sev]>=3||z>=11);
+        let html,iconW=ds,anchor=ds/2;
+        if(showRing){const pad=SEV_RANK[sev]>=3?7:5;iconW=ds+pad*2;anchor=iconW/2;
+            html='<div class="ftp-flag" style="width:'+iconW+'px;height:'+iconW+'px"><span class="enf-ring sev-'+SEV_WORD[sev]+'"></span><div class="ftp-dot" style="background:'+color+';width:'+ds+'px;height:'+ds+'px"></div></div>';}
+        else html='<div class="ftp-dot" style="background:'+color+';width:'+ds+'px;height:'+ds+'px"></div>';
+        const icon=L.divIcon({className:'',html,iconSize:[iconW,iconW],iconAnchor:[anchor,anchor]});
         const m=L.marker([f.latitude,f.longitude],{icon,_classification:f.score_classification||'Unrated',_facilityId:f.facility_id});
         if(isMobile)m.on('click',()=>openFacilityDetail(f.facility_id));
         else{m.bindPopup(buildPopup(f),{maxWidth:240});m.on('click',()=>openFacilityDetail(f.facility_id))}
@@ -664,7 +738,7 @@
         dlog('renderMarkers:',markers.length);clusterLayer.addLayers(markers);
     }
 
-    function buildPopup(f){const s=f.final_score!=null?f.final_score.toFixed(1):'—';return'<div><strong>'+escapeHtml(f.facility_name||'')+'</strong><br><span style="color:var(--text-secondary);font-size:11px">'+escapeHtml(TYPE_LABEL[f.facility_type]||'')+'</span><br><span style="display:inline-block;padding:2px 8px;margin-top:4px;border-radius:10px;font-size:11px;font-weight:600;background:'+classColor(f.score_classification)+';color:#2C3E50">'+s+' · '+escapeHtml(f.score_classification||'Unrated')+'</span></div>'}
+    function buildPopup(f){const s=f.final_score!=null?f.final_score.toFixed(1):'—';const sev=f.has_active_enforcement?normSev(f.enforcement_severity):null;const enfLine=sev?'<br><span style="display:inline-block;margin-top:4px;font-size:11px;font-weight:600;color:#C0392B"><i class="fas fa-triangle-exclamation"></i> Active enforcement · '+escapeHtml(sev.charAt(0)+sev.slice(1).toLowerCase())+'</span>':'';return'<div><strong>'+escapeHtml(f.facility_name||'')+'</strong><br><span style="color:var(--text-secondary);font-size:11px">'+escapeHtml(TYPE_LABEL[f.facility_type]||'')+'</span><br><span style="display:inline-block;padding:2px 8px;margin-top:4px;border-radius:10px;font-size:11px;font-weight:600;background:'+classColor(f.score_classification)+';color:#2C3E50">'+s+' · '+escapeHtml(f.score_classification||'Unrated')+'</span>'+enfLine+'</div>'}
     function updateStats(rows){const sc=rows.filter(r=>r.final_score!=null);const avg=sc.length>0?(sc.reduce((s,r)=>s+r.final_score,0)/sc.length).toFixed(1):'—';let lbl=activeTypeNoun()+' nearby';if(filteredState&&STATE_BY_ABBR[filteredState])lbl=activeTypeNoun()+' in '+STATE_BY_ABBR[filteredState].n;setStats(rows.length,avg,lbl)}
 
     function showEmptyState(reason){const el=document.getElementById('map-empty-overlay');if(el)el.remove();if(currentFacilities.length>0)return;if(isMobile)return;const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';if(reason==='no-types')o.innerHTML='<i class="fas fa-filter"></i><h4>No types selected</h4><p>Enable at least one facility type.</p>';else if(filteredState&&STATE_BY_ABBR[filteredState]){const typeNames=Array.from(activeTypes).map(t=>TYPE_LABEL[t]||t).join(', ');o.innerHTML='<i class="fas fa-search"></i><h4>No results in '+escapeHtml(STATE_BY_ABBR[filteredState].n)+'</h4><p>No '+(typeNames||'facilities')+' found in this state. Try adding more facility types or clearing the state filter.</p><button class="clear-btn" type="button" onclick="clearAllFilters()">Clear Filters</button>'}else o.innerHTML='<i class="fas fa-search"></i><h4>No facilities found</h4><p>Try zooming out or adjusting filters.</p><button class="clear-btn" type="button" onclick="clearAllFilters()">Clear Filters</button>';document.getElementById('map-page').appendChild(o)}
@@ -686,15 +760,57 @@
 
     function buildSkeletonHtml(){return'<div class="facility-info" style="padding-top:14px"><div style="display:flex;justify-content:flex-end;gap:4px;margin-bottom:8px"><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div></div><div class="skeleton-block skeleton-line w70"></div><div class="skeleton-block skeleton-line w40" style="height:8px;margin-bottom:14px"></div><div style="display:flex;gap:14px;align-items:center;margin-bottom:20px"><div class="skeleton-block skeleton-circle"></div><div style="flex:1"><div class="skeleton-block skeleton-line w50"></div><div class="skeleton-block skeleton-line w40" style="height:8px"></div></div></div><div class="skeleton-block skeleton-line w40" style="height:8px;margin-bottom:14px"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div style="margin-top:18px"><div class="skeleton-block skeleton-line w70"></div><div class="skeleton-block skeleton-line w50"></div></div></div>'}
 
+    // ── ENF-VIZ: hospital enforcement banner + survey history ──────────────
+    // facility.enforcement_severity is UNGATED here, so it may be a historical
+    // (expired) label when has_active_enforcement is false. Label accordingly.
+    function buildEnforcementHtml(f,hist){
+        const flagged=!!f.has_active_enforcement;
+        const sev=normSev(f.enforcement_severity);
+        const rows=Array.isArray(hist)?hist:[];
+        if(!flagged&&!sev&&!rows.length)return'';
+        let banner='';
+        if(flagged&&sev){
+            const word=sev.charAt(0)+sev.slice(1).toLowerCase();
+            banner='<div class="enf-banner sev-'+SEV_WORD[sev]+'"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i><div class="enf-banner-body"><div class="enf-banner-head">Under active enforcement &middot; '+escapeHtml(word)+'</div><div class="enf-banner-sub">CMS has a current, unresolved survey finding on record for this facility. Recent findings are marked <strong>Current</strong> below.</div></div></div>';
+        }else if(!flagged&&(sev||rows.length)){
+            // expired label or only-historical records: do NOT present as current
+            banner='<div class="enf-banner expired"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i><div class="enf-banner-body"><div class="enf-banner-head">No active enforcement</div><div class="enf-banner-sub">'+(sev?'A past finding (severity: '+escapeHtml((sev.charAt(0)+sev.slice(1).toLowerCase()))+') has since expired. ':'')+'Any items below are historical and no longer affect the score.</div></div></div>';
+        }
+        let histHtml='';
+        if(rows.length){
+            const sorted=rows.slice().sort((a,b)=>String(b.survey_date||'').localeCompare(String(a.survey_date||'')));
+            const SHOW=4;
+            const render=r=>{
+                const d=r.survey_date?String(r.survey_date).slice(0,10):'';
+                const lvlRaw=(r.deficiency_level||r.severity||'').toLowerCase();
+                const lvl=LVL_WORD[lvlRaw]||'minor';
+                const lvlLabel=lvl==='critical'?'Immediate jeopardy':lvl==='significant'?'Condition-level':'Standard';
+                const active=!!r.is_active;
+                const tag=r.deficiency_tag?'Tag '+escapeHtml(String(r.deficiency_tag)):'';
+                const desc=r.deficiency_description?'<div class="enf-desc">'+escapeHtml(String(r.deficiency_description))+'</div>':'';
+                return'<div class="enf-row"><div class="enf-row-top"><span class="enf-date">'+escapeHtml(d)+'</span><span class="enf-level lvl-'+lvl+'">'+lvlLabel+'</span><span class="enf-status '+(active?'current':'resolved')+'">'+(active?'Current':'Resolved')+'</span>'+(tag?'<span class="enf-tag">'+tag+'</span>':'')+'</div>'+desc+'</div>';
+            };
+            const head=sorted.slice(0,SHOW).map(render).join('');
+            const rest=sorted.length>SHOW?sorted.slice(SHOW).map(render).join(''):'';
+            histHtml='<h3 class="section-header">Survey findings ('+sorted.length+')</h3><div class="enf-history">'+head+
+                (rest?'<div id="enf-rest" hidden>'+rest+'</div><button class="enf-toggle" type="button" data-total="'+sorted.length+'" onclick="toggleEnfHistory(this)">Show all '+sorted.length+' findings</button>':'')+
+                '</div><div class="enf-more">Source: CMS survey deficiency records (QCOR). Findings linger on the score after the survey date, then expire.</div>';
+        }
+        return banner+histHtml;
+    }
+    function toggleEnfHistory(btn){const r=document.getElementById('enf-rest');if(!r)return;const open=!r.hidden;r.hidden=open;btn.textContent=open?('Show all '+(btn.dataset.total||'')+' findings'):'Show fewer';}
+
     function buildFacilityDetailHtml(payload){
         const f=payload.facility||payload,comps=payload.components||[],enf=payload.enforcement||[];
+        const hospEnf=payload.hospital_enforcement||[];
         const score=f.final_score!=null?f.final_score.toFixed(1):'—',cls=f.score_classification||'Unrated',stars=f.cms_overall_rating||null;
         const compHtml=comps.length===0?'<div class="component-na">No component data</div>':comps.sort((a,b)=>(a.component_order||0)-(b.component_order||0)).map(c=>{const cs=c.component_score!=null?c.component_score.toFixed(1):'—';const wt=c.component_weight!=null?Math.round(c.component_weight*100)+'%':'';const fp=c.component_score!=null?Math.max(0,Math.min(100,(c.component_score/10)*100)):0;return'<div><div class="component-row"><div class="component-name">'+escapeHtml(c.component_name||'')+'</div><div class="component-weight">'+wt+'</div><div class="component-score">'+cs+'</div></div><div class="component-bar"><div class="component-bar-fill" style="width:'+fp+'%;background:'+scoreToBarColor(c.component_score)+'"></div></div></div>'}).join('');
         const badges=[];if(truthy(f.teaching_status))badges.push('Teaching');if(truthy(f.has_cardiac_cath_lab))badges.push('Cardiac Cath');if(truthy(f.has_cardiac_surgery))badges.push('Cardiac Surgery');if(truthy(f.nicu_level))badges.push('NICU');if(truthy(f.has_trauma_center))badges.push('Trauma Center');if(truthy(f.has_burn_unit))badges.push('Burn Unit');if(truthy(f.has_organ_transplant))badges.push('Transplant');if(truthy(f.has_mri))badges.push('MRI');if(f.case_mix_index!=null)badges.push('CMI '+Number(f.case_mix_index).toFixed(2));
         const bHtml=badges.length?'<div class="specialty-badges">'+badges.map(b=>'<span class="spec-badge">'+escapeHtml(b)+'</span>').join('')+'</div>':'';
         const eHtml=enf.length?'<div class="enforcement-block"><div class="enforcement-title"><i class="fas fa-gavel"></i> '+enf.length+' regulatory action'+(enf.length===1?'':'s')+'</div>'+enf.slice(0,5).map(e=>'<div class="enforcement-amt">'+escapeHtml(e.penalty_type||'Penalty')+(e.amount?' · $'+Number(e.amount).toLocaleString():'')+(e.penalty_date?' · '+escapeHtml(String(e.penalty_date).slice(0,10)):'')+'</div>').join('')+(enf.length>5?'<div class="enforcement-amt">+ '+(enf.length-5)+' more</div>':'')+'</div>':'';
         const cmsLine=stars?'<span class="cms-stars">CMS overall: '+'<i class="fas fa-star star-icon"></i>'.repeat(Math.round(stars))+' '+stars+'/5</span>':'';
-        return'<div class="facility-info"><div class="detail-header-actions"><button class="detail-action-btn" type="button" onclick="copyFacilityLink(\''+escapeHtml(f.facility_id)+'\')" aria-label="Copy link" title="Copy link"><i class="fas fa-link"></i></button><button class="detail-action-btn" type="button" onclick="shareFacility(\''+escapeHtml(f.facility_id)+'\',\''+escapeHtml(f.facility_name)+'\')" aria-label="Share" title="Share"><i class="fas fa-share-nodes"></i></button><button class="detail-action-btn" type="button" data-pin onclick="togglePinPanel()" aria-label="Pin" title="Pin"><i class="fas fa-thumbtack"></i></button><button class="detail-action-btn" type="button" onclick="closeFacilityInfo()" aria-label="Close" title="Close"><i class="fas fa-times"></i></button></div><div class="facility-header"><h2 class="facility-name">'+escapeHtml(f.facility_name||'')+'</h2><div class="facility-type-line">'+escapeHtml(TYPE_LABEL[f.facility_type]||f.facility_type||'')+'</div><div class="score-block"><div class="score-circle '+(cls==='Unrated'?'unrated':'')+'" style="background:'+classColor(cls)+'">'+score+'</div><div class="score-meta"><span class="classification-badge '+classBadgeClass(cls)+'" style="background:'+classColor(cls)+'">'+escapeHtml(cls)+'</span><span class="score-out-of">FTP score · 10-point scale</span>'+cmsLine+'</div></div>'+bHtml+'</div><h3 class="section-header">Component breakdown</h3>'+compHtml+eHtml+'<div class="addr-block">'+(f.address?'<div><i class="fas fa-map-marker-alt"></i>'+escapeHtml(f.address||'')+'</div>':'')+'<div style="padding-left:20px">'+escapeHtml(f.city||'')+(f.city?', ':'')+escapeHtml(f.state||'')+' '+escapeHtml(f.zip_code||'')+'</div>'+(f.phone?'<div><i class="fas fa-phone"></i>'+escapeHtml(f.phone)+'</div>':'')+'</div><a href="https://maps.google.com/?q='+f.latitude+','+f.longitude+'" target="_blank" rel="noopener noreferrer" class="directions-btn">Get Directions</a><div class="print-methodology-url">Methodology: https://forthepatient.org/methodology</div></div>';
+        const enfVizHtml=buildEnforcementHtml(f,hospEnf);
+        return'<div class="facility-info"><div class="detail-header-actions"><button class="detail-action-btn" type="button" onclick="copyFacilityLink(\''+escapeHtml(f.facility_id)+'\')" aria-label="Copy link" title="Copy link"><i class="fas fa-link"></i></button><button class="detail-action-btn" type="button" onclick="shareFacility(\''+escapeHtml(f.facility_id)+'\',\''+escapeHtml(f.facility_name)+'\')" aria-label="Share" title="Share"><i class="fas fa-share-nodes"></i></button><button class="detail-action-btn" type="button" data-pin onclick="togglePinPanel()" aria-label="Pin" title="Pin"><i class="fas fa-thumbtack"></i></button><button class="detail-action-btn" type="button" onclick="closeFacilityInfo()" aria-label="Close" title="Close"><i class="fas fa-times"></i></button></div><div class="facility-header"><h2 class="facility-name">'+escapeHtml(f.facility_name||'')+'</h2><div class="facility-type-line">'+escapeHtml(TYPE_LABEL[f.facility_type]||f.facility_type||'')+'</div><div class="score-block"><div class="score-circle '+(cls==='Unrated'?'unrated':'')+'" style="background:'+classColor(cls)+'">'+score+'</div><div class="score-meta"><span class="classification-badge '+classBadgeClass(cls)+'" style="background:'+classColor(cls)+'">'+escapeHtml(cls)+'</span><span class="score-out-of">FTP score · 10-point scale</span>'+cmsLine+'</div></div>'+bHtml+'</div><h3 class="section-header">Component breakdown</h3>'+compHtml+eHtml+enfVizHtml+'<div class="addr-block">'+(f.address?'<div><i class="fas fa-map-marker-alt"></i>'+escapeHtml(f.address||'')+'</div>':'')+'<div style="padding-left:20px">'+escapeHtml(f.city||'')+(f.city?', ':'')+escapeHtml(f.state||'')+' '+escapeHtml(f.zip_code||'')+'</div>'+(f.phone?'<div><i class="fas fa-phone"></i>'+escapeHtml(f.phone)+'</div>':'')+'</div><a href="https://maps.google.com/?q='+f.latitude+','+f.longitude+'" target="_blank" rel="noopener noreferrer" class="directions-btn">Get Directions</a><div class="print-methodology-url">Methodology: https://forthepatient.org/methodology</div></div>';
     }
 
     function closeFacilityInfo(){
@@ -852,7 +968,8 @@
         let html=shown.map(f=>{
             const cls=f.score_classification||'Unrated',sc=classColor(cls),st=f.final_score!=null?f.final_score.toFixed(1):'—';
             const dist=(o&&f._dist!=null&&isFinite(f._dist))?'<span class="fdist">'+(f._dist<10?f._dist.toFixed(1):Math.round(f._dist))+' mi</span>':'';
-            const flag=f.has_active_enforcement?'<span class="sheet-flag" aria-label="Under active enforcement">FLAGGED</span>':'';
+            const sev=f.has_active_enforcement?normSev(f.enforcement_severity):null;
+            const flag=f.has_active_enforcement?'<span class="sheet-flag'+(sev?' sev-'+SEV_WORD[sev]:'')+'" aria-label="Under active enforcement'+(sev?', '+SEV_WORD[sev]:'')+'">FLAGGED</span>':'';
             return'<button class="sheet-frow" type="button" data-id="'+escapeHtml(f.facility_id)+'"><span class="sc '+(cls==='Unrated'?'unrated':'')+'" style="background:'+sc+'">'+st+'</span><span class="fmeta"><span class="fnm">'+escapeHtml(f.facility_name||'')+'</span><span class="fsub">'+escapeHtml(TYPE_LABEL[f.facility_type]||'')+' · '+escapeHtml(cls)+'</span></span>'+flag+dist+'</button>';
         }).join('');
         if(rows.length>CAP)html+='<div class="sheet-guide" style="padding:14px 10px"><p>Showing the nearest '+CAP+' of '+rows.length.toLocaleString()+'. Zoom in or search to narrow it down.</p></div>';
