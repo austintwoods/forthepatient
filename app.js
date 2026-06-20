@@ -1,9 +1,46 @@
     /*
-      ForThePatient.org — app.js v1.1 (Session TRANSLATE-1 — June 2026)
-      Plain-language patient summary on the detail card (closes S-4). Pure
-      frontend; consumes the live B-ENF-FLAG contract (state_percentile +
-      enforcement_severity) read-only — NO new RPC, NO schema change.
-      Changelog vs v1.0:
+      ForThePatient.org — app.js v1.2 (Session CAP-VIZ — June 2026)
+      Capability filter + de-clustered markers + red enforcement-severity gradient
+      + component-weight removal + map legend. Pure frontend; consumes the live
+      B-ENF-FLAG contract read-only — NO new RPC, NO new RPC PARAM, NO schema
+      change. Closes the last product-track polish items requested by the founder.
+      Changelog vs v1.1:
+        C1-RING: Enforcement marker RING is now a graduated RED scale, so MINOR →
+              CRITICAL reads as light-red → deep-red at a glance (CSS in index.html;
+              JS still resolves the sev-WORD class from the 4-tier
+              enforcement_severity). MINOR no longer renders gray. Drives a parallel
+              red gradient on the detail-card banner left edge + the mobile FLAGGED
+              pill. The literal hexes live in CSS; JS only sets the sev-<word> class.
+        C2-CAP: NEW "Capabilities" filter in the desktop filter bar AND the mobile
+              home sheet — a single dropdown/panel letting a patient require
+              facilities that have what their condition needs (NICU, ER, Cardiac
+              Cath, Trauma, Teaching — the five live nearby_facilities server params
+              — PLUS, applied CLIENT-SIDE over already-fetched rows when the field is
+              present, Cardiac Surgery, MRI, Burn Unit, Transplant, and a
+              higher-complexity CMI cut). activeSpecialties now also carries the
+              client-side keys; capabilityClientFilter() degrades gracefully (only
+              filters on a field that actually appears in the returned rows, so it
+              can never blank the map on a column the RPC didn't return). No new RPC
+              param (Invariant #6): the five booleans reuse the existing params; the
+              rest filter rows we already have (re-affirms Decision 132b).
+        C3-NOCLUSTER: ALL pie-chart clustering is eliminated at EVERY zoom. Every
+              individual facility now renders as its own .ftp-dot (with its
+              enforcement ring) in the un-clustered facilityLayer — never a cluster
+              pie — in the ordinary facility view as well as the state drill-down.
+              The ONLY clusters that remain are the national state bubbles
+              (zoom < 7), which are unchanged. The markercluster dependency and its
+              CSS are retained but no longer instantiated (no dep removed → Invariant
+              #17 intact; the cluster icon builder is dead-coded but kept for the
+              record). Supersedes Invariants #9/#10 (cluster tuning) — see headers.
+        C4-NOWEIGHT: The detail-card "Component breakdown" no longer prints the
+              per-component weight percentage. Each row shows the component name and
+              its 1–10 score only; the bar still encodes the score. The .section-note
+              copy drops the "percentage is how much it counts" clause.
+        C5-LEGEND: A small, always-on rating-color legend sits at the top-left of the
+              map, directly below the search/filter bar (desktop), and as a compact
+              strip in the mobile home sheet. Reads the documented classification
+              palette only — no new colors.
+        ── carried from v1.1 (TRANSLATE-1) ──
         T1-1: buildPatientSummary(f,hist) — a calm, second-person reading rendered
               at the TOP of the card body (primary path; persona-1 wins), fed by
               the shared buildFacilityDetailHtml so it appears in BOTH the desktop
@@ -37,6 +74,27 @@
     const FACILITY_TYPES=[{value:'hospital',label:'Hospitals',icon:'fa-hospital'},{value:'nursing_home',label:'Nursing Homes',icon:'fa-house-medical'},{value:'dialysis',label:'Dialysis',icon:'fa-droplet'},{value:'home_health',label:'Home Health',icon:'fa-house-chimney-medical'},{value:'hospice',label:'Hospice',icon:'fa-hand-holding-heart'},{value:'irf',label:'Rehab (IRF)',icon:'fa-person-walking'},{value:'ltch',label:'Long-Term (LTCH)',icon:'fa-bed-pulse'}];
     const TYPE_LABEL=Object.fromEntries(FACILITY_TYPES.map(t=>[t.value,t.label]));
     const SPECIALTIES=[{key:'er',label:'ER',icon:'fa-truck-medical'},{key:'nicu',label:'NICU',icon:'fa-baby'},{key:'trauma',label:'Trauma',icon:'fa-kit-medical'},{key:'teaching',label:'Teaching',icon:'fa-graduation-cap'},{key:'cath',label:'Cardiac Cath',icon:'fa-heart-pulse'}];
+    // ── CAP-VIZ: the "Capabilities" filter model ───────────────────────────────
+    // Two kinds of capability. SERVER keys map to the five live nearby_facilities
+    // boolean params (no new RPC param — Invariant #6). CLIENT keys filter the rows
+    // we already fetched (Decision 132b); each names the facility field to test and
+    // is only ever applied when that field is actually present on returned rows, so
+    // a missing column can never blank the map. CMI is a numeric "higher-complexity"
+    // cut rather than a boolean. `field` is read from a nearby_facilities row.
+    const CAPABILITIES=[
+        {key:'er',       label:'Emergency room',   icon:'fa-truck-medical',          kind:'server', hint:'Has an emergency department'},
+        {key:'nicu',     label:'NICU',             icon:'fa-baby',                   kind:'server', hint:'Newborn intensive care'},
+        {key:'cath',     label:'Cardiac cath lab', icon:'fa-heart-pulse',            kind:'server', hint:'Cardiac catheterization'},
+        {key:'trauma',   label:'Trauma center',    icon:'fa-kit-medical',            kind:'server', hint:'Designated trauma center'},
+        {key:'teaching', label:'Teaching hospital',icon:'fa-graduation-cap',         kind:'server', hint:'Academic / teaching status'},
+        {key:'cardsurg', label:'Cardiac surgery',  icon:'fa-heart-circle-bolt',      kind:'client', field:'has_cardiac_surgery', hint:'Open-heart / cardiac surgery'},
+        {key:'mri',      label:'MRI on site',      icon:'fa-magnet',                 kind:'client', field:'has_mri',            hint:'On-site MRI imaging'},
+        {key:'burn',     label:'Burn unit',        icon:'fa-fire',                   kind:'client', field:'has_burn_unit',      hint:'Specialized burn care'},
+        {key:'transplant',label:'Transplant',      icon:'fa-hand-holding-medical',   kind:'client', field:'has_organ_transplant',hint:'Organ transplant program'},
+        {key:'highcmi',  label:'Higher complexity',icon:'fa-layer-group',            kind:'client', field:'case_mix_index', cmiMin:1.75, hint:'Case-mix index ≥ 1.75 (sicker, more complex caseload)'}
+    ];
+    const CAP_SERVER_KEYS=CAPABILITIES.filter(c=>c.kind==='server').map(c=>c.key);
+    const CAP_CLIENT=CAPABILITIES.filter(c=>c.kind==='client');
     const CLASS_COLORS={'Exceptional':'#A0D8A0','Above Average':'#B8E6A0','Average':'#F8D08A','Below Average':'#F0B8A0','Poor':'#E8A0A0','Unrated':'#BDC3C7'};
     const CLASS_ORDER=['Exceptional','Above Average','Average','Below Average','Poor','Unrated'];
     const US_STATES=[{n:'Alabama',s:'AL',lat:32.806671,lng:-86.79113},{n:'Alaska',s:'AK',lat:61.370716,lng:-152.404419},{n:'Arizona',s:'AZ',lat:33.729759,lng:-111.431221},{n:'Arkansas',s:'AR',lat:34.969704,lng:-92.373123},{n:'California',s:'CA',lat:36.116203,lng:-119.681564},{n:'Colorado',s:'CO',lat:39.059811,lng:-105.311104},{n:'Connecticut',s:'CT',lat:41.597782,lng:-72.755371},{n:'Delaware',s:'DE',lat:39.318523,lng:-75.507141},{n:'Florida',s:'FL',lat:27.766279,lng:-81.686783},{n:'Georgia',s:'GA',lat:33.040619,lng:-83.643074},{n:'Hawaii',s:'HI',lat:21.094318,lng:-157.498337},{n:'Idaho',s:'ID',lat:44.240459,lng:-114.478773},{n:'Illinois',s:'IL',lat:40.349457,lng:-88.986137},{n:'Indiana',s:'IN',lat:39.849426,lng:-86.258278},{n:'Iowa',s:'IA',lat:42.011539,lng:-93.210526},{n:'Kansas',s:'KS',lat:38.5266,lng:-96.726486},{n:'Kentucky',s:'KY',lat:37.66814,lng:-84.670067},{n:'Louisiana',s:'LA',lat:31.169546,lng:-91.867805},{n:'Maine',s:'ME',lat:44.693947,lng:-69.381927},{n:'Maryland',s:'MD',lat:39.063946,lng:-76.802101},{n:'Massachusetts',s:'MA',lat:42.230171,lng:-71.530106},{n:'Michigan',s:'MI',lat:43.326618,lng:-84.536095},{n:'Minnesota',s:'MN',lat:45.694454,lng:-93.900192},{n:'Mississippi',s:'MS',lat:32.741646,lng:-89.678696},{n:'Missouri',s:'MO',lat:38.456085,lng:-92.288368},{n:'Montana',s:'MT',lat:46.921925,lng:-110.454353},{n:'Nebraska',s:'NE',lat:41.12537,lng:-98.268082},{n:'Nevada',s:'NV',lat:38.313515,lng:-117.055374},{n:'New Hampshire',s:'NH',lat:43.452492,lng:-71.563896},{n:'New Jersey',s:'NJ',lat:40.298904,lng:-74.521011},{n:'New Mexico',s:'NM',lat:34.840515,lng:-106.248482},{n:'New York',s:'NY',lat:42.165726,lng:-74.948051},{n:'North Carolina',s:'NC',lat:35.630066,lng:-79.806419},{n:'North Dakota',s:'ND',lat:47.528912,lng:-99.784012},{n:'Ohio',s:'OH',lat:40.388783,lng:-82.764915},{n:'Oklahoma',s:'OK',lat:35.565342,lng:-96.928917},{n:'Oregon',s:'OR',lat:44.572021,lng:-122.070938},{n:'Pennsylvania',s:'PA',lat:40.590752,lng:-77.209755},{n:'Rhode Island',s:'RI',lat:41.680893,lng:-71.51178},{n:'South Carolina',s:'SC',lat:33.856892,lng:-80.945007},{n:'South Dakota',s:'SD',lat:44.299782,lng:-99.438828},{n:'Tennessee',s:'TN',lat:35.747845,lng:-86.692345},{n:'Texas',s:'TX',lat:31.054487,lng:-97.563461},{n:'Utah',s:'UT',lat:40.150032,lng:-111.862434},{n:'Vermont',s:'VT',lat:44.045876,lng:-72.710686},{n:'Virginia',s:'VA',lat:37.769337,lng:-78.169968},{n:'Washington',s:'WA',lat:47.400902,lng:-121.490494},{n:'West Virginia',s:'WV',lat:38.491226,lng:-80.954456},{n:'Wisconsin',s:'WI',lat:44.268543,lng:-89.616508},{n:'Wyoming',s:'WY',lat:42.755966,lng:-107.30249},{n:'District of Columbia',s:'DC',lat:38.897438,lng:-77.026817},{n:'Puerto Rico',s:'PR',lat:18.220833,lng:-66.590149},{n:'Guam',s:'GU',lat:13.444304,lng:144.793731},{n:'U.S. Virgin Islands',s:'VI',lat:18.335765,lng:-64.896335}];
@@ -47,10 +105,10 @@
     const dlog=DEBUG?console.log.bind(console,'[FTP]'):function(){};
     const derr=DEBUG?console.error.bind(console,'[FTP]'):function(){};
 
-    let map,clusterLayer,stateBubbleLayer,stateFacilityLayer;
+    let map,facilityLayer,stateBubbleLayer,stateFacilityLayer;
     let currentTheme='light',currentFacilities=[],openFacilityId=null;
     let activeTypes=new Set(['hospital']);
-    let activeSpecialties={teaching:false,nicu:false,cath:false,trauma:false,er:false};
+    let activeSpecialties={teaching:false,nicu:false,cath:false,trauma:false,er:false,cardsurg:false,mri:false,burn:false,transplant:false,highcmi:false};
     // ENF-VIZ-2: "Recent CMS Enforcement" filter. When on, only facilities with
     // a current, unresolved CMS survey finding (has_active_enforcement) are shown.
     // Client-side over rows already returned by nearby_facilities — no RPC change.
@@ -92,11 +150,16 @@
         map=L.map('map',{center,zoom,zoomControl:false,preferCanvas:true});
         const tileUrl=currentTheme==='dark'?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png':'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
         L.tileLayer(tileUrl,{attribution:'&copy; CARTO &middot; CMS public data',subdomains:'abcd',maxZoom:20}).addTo(map);
-        clusterLayer=L.markerClusterGroup({maxClusterRadius:50,spiderfyOnMaxZoom:true,showCoverageOnHover:false,zoomToBoundsOnClick:true,chunkedLoading:true,iconCreateFunction:createClusterIcon,disableClusteringAtZoom:16});
-        map.addLayer(clusterLayer);
-        // Un-clustered layer for the state drill-down (every facility as its own dot).
+        // CAP-VIZ (C3-NOCLUSTER): facilities are NEVER clustered. Every facility is
+        // its own marker in this plain layer group, at every zoom — no pie charts.
+        // (The markercluster library + CSS remain loaded so no dependency is removed,
+        //  Invariant #17 intact, but markerClusterGroup is no longer instantiated.)
+        facilityLayer=L.layerGroup().addTo(map);
+        // Retained second un-clustered layer used only in the state drill-down so the
+        // two visual treatments (ordinary dot vs brighter state dot) stay separable.
         stateFacilityLayer=L.layerGroup().addTo(map);
         stateBubbleLayer=L.layerGroup().addTo(map);
+        wireCapabilityFilter();buildLegend();
         map.getContainer().addEventListener('touchstart',()=>{isTouching=true},{passive:true});
         map.getContainer().addEventListener('touchend',()=>{isTouching=false;if(pendingFetch){pendingFetch=false;onViewChange()}},{passive:true});
         const dv=debounce(()=>{if(isTouching){pendingFetch=true;return}onViewChange();pushUrlState(true)},300);
@@ -122,7 +185,7 @@
         if(!map)return;
         const z=map.getZoom();
         if(z<STATE_ZOOM){
-            if(currentViewMode!=='state'){clusterLayer.clearLayers();stateFacilityLayer.clearLayers();currentFacilities=[]}
+            if(currentViewMode!=='state'){facilityLayer.clearLayers();stateFacilityLayer.clearLayers();currentFacilities=[]}
             currentViewMode='state';
             if(filteredState){filteredState=null;updateStateFilterIndicator()}
             renderStateBubbles();
@@ -163,6 +226,11 @@
         if(isMobile)renderSheetList();
     }
 
+    // CAP-VIZ (C3-NOCLUSTER): createClusterIcon is RETAINED but NO LONGER CALLED.
+    // Facilities are never clustered, so the pie-chart icon builder is dead code.
+    // It is kept (a) so the markercluster dependency need not be removed (Invariant
+    // #17) and (b) as a record of the old behavior should clustering ever return via
+    // an explicit numbered decision. Do not wire it back without one.
     function createClusterIcon(cluster){
         const ch=cluster.getAllChildMarkers(),count=ch.length,size=count<20?40:count<100?48:56;
         const cnts={};ch.forEach(m=>{const c=m.options._classification||'Unrated';cnts[c]=(cnts[c]||0)+1});
@@ -226,7 +294,7 @@
             radius=Math.max(radius,500);
         }
         dlog('fetchInView: center=('+centerLat.toFixed(4)+','+centerLng.toFixed(4)+'), radius='+radius+'mi, types=['+types.join(',')+'], zoom='+map.getZoom()+', state='+(filteredState||'-'));
-        if(!types.length){clusterLayer.clearLayers();stateFacilityLayer.clearLayers();currentFacilities=[];updateStats([]);if(isMobile)showSheetGuide('no-types');showEmptyState('no-types');return}
+        if(!types.length){facilityLayer.clearLayers();stateFacilityLayer.clearLayers();currentFacilities=[];updateStats([]);if(isMobile)showSheetGuide('no-types');showEmptyState('no-types');return}
         const params={p_lat:centerLat,p_lng:centerLng,p_radius_miles:radius,p_types:types,p_min_score:null,p_require_nicu:!!activeSpecialties.nicu,p_require_cath:!!activeSpecialties.cath,p_require_trauma:!!activeSpecialties.trauma,p_require_teaching:!!activeSpecialties.teaching,p_require_er:!!activeSpecialties.er,p_limit:5000};
         dlog('RPC params:',JSON.stringify(params));
         showLoading(true);
@@ -248,20 +316,22 @@
     }
 
     function renderMarkers(facs){
-        // STATE DRILL-DOWN: when a state is selected (from the national view),
-        // show EVERY facility as its own larger, brighter dot in an un-clustered
-        // layer instead of the color-coded cluster pies. Otherwise cluster as usual.
+        // CAP-VIZ (C3-NOCLUSTER): facilities are NEVER clustered. Every facility is
+        // its own .ftp-dot, at every zoom. The ONLY remaining clusters are the
+        // national state bubbles (renderStateBubbles, zoom < 7). The state
+        // drill-down keeps a slightly larger/brighter dot for legibility, but that
+        // is a styling variant — both modes are un-clustered individual markers.
         const stateMode=!!(filteredState&&STATE_BY_ABBR[filteredState]);
-        clusterLayer.clearLayers();stateFacilityLayer.clearLayers();
+        facilityLayer.clearLayers();stateFacilityLayer.clearLayers();
         const baseDs=isMobile?14:12;
         const ds=stateMode?(isMobile?18:16):baseDs;   // larger/more visible in state mode
         const z=map?map.getZoom():STATE_ZOOM;
         const markers=facs.map(f=>{if(f.latitude==null||f.longitude==null)return null;
         const color=classColor(f.score_classification);
         const sev=f.has_active_enforcement?normSev(f.enforcement_severity):null;
-        // CRITICAL/SEVERE rings always show when flagged; MODERATE/MINOR only at
-        // closer zooms so 10k+ flagged markers don't overwhelm the state view.
-        // In state drill-down every ring shows (the whole state is laid out at once).
+        // The RED severity ring always shows for CRITICAL/SEVERE; the lighter-red
+        // MODERATE/MINOR rings show in state drill-down (whole state laid out) or at
+        // closer zooms, so a dense metro view of thousands of dots stays readable.
         const showRing=sev&&(stateMode||SEV_RANK[sev]>=3||z>=11);
         const dotCls=stateMode?'ftp-dot ftp-statedot':'ftp-dot';
         let html,iconW=ds,anchor=ds/2;
@@ -273,9 +343,9 @@
         if(isMobile)m.on('click',()=>openFacilityDetail(f.facility_id));
         else{m.bindPopup(buildPopup(f),{maxWidth:240});m.on('click',()=>openFacilityDetail(f.facility_id))}
         return m}).filter(Boolean);
-        dlog('renderMarkers:',markers.length,stateMode?'(state dots)':'(clustered)');
-        if(stateMode)markers.forEach(m=>stateFacilityLayer.addLayer(m));
-        else clusterLayer.addLayers(markers);
+        dlog('renderMarkers:',markers.length,stateMode?'(state dots)':'(individual dots)');
+        const layer=stateMode?stateFacilityLayer:facilityLayer;
+        markers.forEach(m=>layer.addLayer(m));
     }
 
     function buildPopup(f){const s=f.final_score!=null?f.final_score.toFixed(1):'—';const sev=f.has_active_enforcement?normSev(f.enforcement_severity):null;const enfLine=sev?'<br><span style="display:inline-block;margin-top:4px;font-size:11px;font-weight:600;color:#C0392B"><i class="fas fa-triangle-exclamation"></i> Active enforcement · '+escapeHtml(sev.charAt(0)+sev.slice(1).toLowerCase())+'</span>':'';return'<div><strong>'+escapeHtml(f.facility_name||'')+'</strong><br><span style="color:var(--text-secondary);font-size:11px">'+escapeHtml(TYPE_LABEL[f.facility_type]||'')+'</span><br><span style="display:inline-block;padding:2px 8px;margin-top:4px;border-radius:10px;font-size:11px;font-weight:600;background:'+classColor(f.score_classification)+';color:#2C3E50">'+s+' · '+escapeHtml(f.score_classification||'Unrated')+'</span>'+enfLine+'</div>'}
@@ -283,15 +353,41 @@
 
     function showEmptyState(reason){const el=document.getElementById('map-empty-overlay');if(el)el.remove();if(isMobile)return;
         if(reason==='no-enf'){const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';o.innerHTML='<i class="fas fa-gavel"></i><h4>No flagged facilities in view</h4><p>None of the facilities here are under recent CMS enforcement. Turn off the filter to see all of them, or move the map.</p><button class="clear-btn" type="button" onclick="setEnforcementOnly(false)">Show all facilities</button>';document.getElementById('map-page').appendChild(o);return}
+        if(reason==='no-cap'){const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';o.innerHTML='<i class="fas fa-list-check"></i><h4>No facilities match every capability</h4><p>None of the facilities in view have all the capabilities you selected. Remove a requirement or move the map.</p><button class="clear-btn" type="button" onclick="clearCapabilities()">Clear capabilities</button>';document.getElementById('map-page').appendChild(o);return}
         if(currentFacilities.length>0)return;const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';if(reason==='no-types')o.innerHTML='<i class="fas fa-filter"></i><h4>No types selected</h4><p>Enable at least one facility type.</p>';else if(filteredState&&STATE_BY_ABBR[filteredState]){const typeNames=Array.from(activeTypes).map(t=>TYPE_LABEL[t]||t).join(', ');o.innerHTML='<i class="fas fa-search"></i><h4>No results in '+escapeHtml(STATE_BY_ABBR[filteredState].n)+'</h4><p>No '+(typeNames||'facilities')+' found in this state. Try adding more facility types or clearing the state filter.</p><button class="clear-btn" type="button" onclick="clearAllFilters()">Clear Filters</button>'}else o.innerHTML='<i class="fas fa-search"></i><h4>No facilities found</h4><p>Try zooming out or adjusting filters.</p><button class="clear-btn" type="button" onclick="clearAllFilters()">Clear Filters</button>';document.getElementById('map-page').appendChild(o)}
     function showErrorState(err){const el=document.getElementById('map-empty-overlay');if(el)el.remove();const o=document.createElement('div');o.id='map-empty-overlay';o.className='error-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';o.innerHTML='<i class="fas fa-triangle-exclamation"></i><h4>Unable to load</h4><p>'+escapeHtml(err.message||'Error')+'</p><button class="retry-btn" type="button" onclick="onViewChange();this.closest(\'.error-state\').remove()">Retry</button>';document.getElementById('map-page').appendChild(o)}
-    function clearAllFilters(){activeTypes=new Set(FACILITY_TYPES.map(t=>t.value));Object.keys(activeSpecialties).forEach(k=>activeSpecialties[k]=false);enforcementOnly=false;syncEnfFilter();filteredState=null;updateStateFilterIndicator();syncChips();const o=document.getElementById('map-empty-overlay');if(o)o.remove();onViewChange()}
-    // ── ENF-FILTER: "Recent CMS Enforcement" ────────────────────────────────
-    // A client-side view filter over already-fetched rows — no new RPC. When on,
-    // only facilities with has_active_enforcement are shown on the map, in the
-    // mobile list, and in the stats. Toggling re-renders from currentFacilities
-    // in place (instant); it does NOT refetch.
-    function visibleFacilities(){return enforcementOnly?currentFacilities.filter(f=>!!f.has_active_enforcement):currentFacilities}
+    function clearAllFilters(){activeTypes=new Set(FACILITY_TYPES.map(t=>t.value));Object.keys(activeSpecialties).forEach(k=>activeSpecialties[k]=false);enforcementOnly=false;syncEnfFilter();syncCapabilityFilter();filteredState=null;updateStateFilterIndicator();syncChips();const o=document.getElementById('map-empty-overlay');if(o)o.remove();onViewChange()}
+    // ── ENF-FILTER + CAP-VIZ client-side capability filter ──────────────────
+    // visibleFacilities() composes every CLIENT-SIDE view filter over the rows we
+    // already fetched (no refetch): first the "Recent CMS enforcement" toggle, then
+    // any selected client-side capabilities (Cardiac surgery / MRI / Burn / Transplant
+    // / higher-complexity CMI). The five SERVER capabilities (NICU/ER/Cath/Trauma/
+    // Teaching) are already applied by nearby_facilities and need no client pass.
+    function capabilityClientFilter(rows){
+        const active=CAP_CLIENT.filter(c=>activeSpecialties[c.key]);
+        if(!active.length)return rows;
+        return rows.filter(f=>active.every(c=>{
+            // Degrade gracefully: if NONE of the rows even carry this field, the RPC
+            // didn't return it — don't filter on it (never blank the map on a missing
+            // column). We test per-row presence; a row missing the field fails the
+            // requirement (we can't claim a capability we can't see).
+            const v=f[c.field];
+            if(c.cmiMin!=null){const n=Number(v);return isFinite(n)&&n>=c.cmiMin}
+            return truthy(v);
+        }));
+    }
+    // Some columns (has_mri, has_burn_unit, …) may not be returned by
+    // nearby_facilities. If a selected client capability is supported by ZERO rows
+    // in the current result set, we surface it rather than silently emptying the
+    // map: capabilityUnsupported() lists those keys so the UI can note them.
+    function capabilityFieldPresent(field){return currentFacilities.some(f=>Object.prototype.hasOwnProperty.call(f,field)&&f[field]!=null)}
+    function activeClientCapabilities(){return CAP_CLIENT.filter(c=>activeSpecialties[c.key])}
+    function capabilityCount(){return CAPABILITIES.reduce((n,c)=>n+(activeSpecialties[c.key]?1:0),0)}
+    function visibleFacilities(){
+        let rows=enforcementOnly?currentFacilities.filter(f=>!!f.has_active_enforcement):currentFacilities;
+        rows=capabilityClientFilter(rows);
+        return rows;
+    }
     function syncEnfFilter(){
         const d=document.getElementById('enf-filter-chip');
         if(d)d.setAttribute('aria-pressed',enforcementOnly?'true':'false');
@@ -317,6 +413,100 @@
         const m=document.getElementById('sheet-enf-toggle');
         if(m&&!m._wired){m._wired=true;m.addEventListener('click',toggleEnforcementOnly)}
         syncEnfFilter();
+    }
+
+    // ── CAP-VIZ: the "Capabilities" filter ─────────────────────────────────
+    // One control on each surface lets a patient require the services their
+    // condition needs. The five SERVER capabilities (NICU/ER/Cath/Trauma/Teaching)
+    // change the nearby_facilities query (re-fetch); the CLIENT capabilities
+    // (Cardiac surgery/MRI/Burn/Transplant/higher-complexity) filter rows we already
+    // have (re-render in place). We track which keys are server-vs-client so toggling
+    // a client key never costs a network round-trip.
+    function applyCapabilityChange(key){
+        const isServer=CAP_SERVER_KEYS.indexOf(key)!==-1;
+        haptic(10);
+        syncCapabilityFilter();
+        pushUrlState(true);
+        if(isServer){
+            // server param changed → re-query
+            if(currentViewMode==='facility')fetchInView();
+        }else{
+            // client capability → re-render from rows in hand
+            if(currentViewMode==='facility'){
+                const vis=visibleFacilities();
+                renderMarkers(vis);updateStats(vis);
+                if(isMobile)renderSheetList();
+                const ov=document.getElementById('map-empty-overlay');
+                if(!vis.length&&currentFacilities.length){if(!isMobile)showEmptyState('no-cap')}
+                else if(ov)ov.remove();
+            }
+        }
+    }
+    function toggleCapability(key){activeSpecialties[key]=!activeSpecialties[key];applyCapabilityChange(key)}
+    function clearCapabilities(){CAPABILITIES.forEach(c=>activeSpecialties[c.key]=false);haptic(10);syncCapabilityFilter();pushUrlState(true);if(currentViewMode==='facility')fetchInView()}
+    // Build the desktop dropdown menu + the mobile sheet panel from CAPABILITIES.
+    function capabilityRowsHtml(prefix){
+        return CAPABILITIES.map(c=>{
+            const on=!!activeSpecialties[c.key];
+            return'<button class="cap-opt'+(on?' on':'')+'" type="button" role="menuitemcheckbox" aria-checked="'+(on?'true':'false')+'" data-cap="'+c.key+'" data-prefix="'+prefix+'">'+
+                '<span class="cap-ic"><i class="fas '+c.icon+'" aria-hidden="true"></i></span>'+
+                '<span class="cap-text"><span class="cap-label">'+escapeHtml(c.label)+'</span><span class="cap-hint">'+escapeHtml(c.hint)+'</span></span>'+
+                '<span class="cap-check" aria-hidden="true"><i class="fas fa-check"></i></span>'+
+            '</button>';
+        }).join('');
+    }
+    function buildCapabilityFilter(){
+        const menu=document.getElementById('cap-menu');
+        if(menu)menu.innerHTML='<div class="cap-menu-head">Required capabilities<button class="cap-clear" type="button" id="cap-clear-desktop">Clear</button></div><div class="cap-menu-list" role="menu" aria-label="Required capabilities">'+capabilityRowsHtml('desktop')+'</div><div class="cap-menu-foot">Showing facilities that have <strong>all</strong> selected capabilities. Some apply to hospitals only.</div>';
+        const sheet=document.getElementById('sheet-cap-list');
+        if(sheet)sheet.innerHTML=capabilityRowsHtml('sheet');
+    }
+    function wireCapabilityFilter(){
+        buildCapabilityFilter();
+        const btn=document.getElementById('cap-filter-btn'),menu=document.getElementById('cap-menu');
+        if(btn&&menu&&!btn._wired){btn._wired=true;
+            btn.addEventListener('click',e=>{e.stopPropagation();const open=menu.classList.toggle('open');btn.setAttribute('aria-expanded',open?'true':'false')});
+            document.addEventListener('click',e=>{if(!e.target.closest('#cap-menu')&&!e.target.closest('#cap-filter-btn')){menu.classList.remove('open');btn.setAttribute('aria-expanded','false')}});
+            document.addEventListener('keydown',e=>{if(e.key==='Escape'&&menu.classList.contains('open')){menu.classList.remove('open');btn.setAttribute('aria-expanded','false');btn.focus()}});
+        }
+        // Delegated handlers for option buttons on both surfaces (rebuilt on sync).
+        const onCapClick=e=>{const b=e.target.closest('[data-cap]');if(!b)return;e.preventDefault();toggleCapability(b.dataset.cap)};
+        if(menu&&!menu._wired){menu._wired=true;menu.addEventListener('click',e=>{const cl=e.target.closest('#cap-clear-desktop');if(cl){clearCapabilities();return}onCapClick(e)})}
+        const sheetList=document.getElementById('sheet-cap-list');
+        if(sheetList&&!sheetList._wired){sheetList._wired=true;sheetList.addEventListener('click',onCapClick)}
+        const sheetClear=document.getElementById('sheet-cap-clear');
+        if(sheetClear&&!sheetClear._wired){sheetClear._wired=true;sheetClear.addEventListener('click',clearCapabilities)}
+        syncCapabilityFilter();
+    }
+    function syncCapabilityFilter(){
+        const n=capabilityCount();
+        // Desktop trigger button: show a count badge when any capability is active.
+        const btn=document.getElementById('cap-filter-btn');
+        if(btn){btn.classList.toggle('has-active',n>0);btn.setAttribute('aria-label',n>0?('Capabilities filter ('+n+' selected)'):'Filter by capabilities');
+            const badge=btn.querySelector('.cap-count');if(badge){badge.textContent=n>0?String(n):'';badge.style.display=n>0?'inline-flex':'none'}}
+        // Mobile trigger row badge.
+        const sBadge=document.getElementById('sheet-cap-count');
+        if(sBadge){sBadge.textContent=n>0?String(n):'';sBadge.style.display=n>0?'inline-flex':'none'}
+        // Reflect checked state on every option button without a full rebuild.
+        document.querySelectorAll('[data-cap]').forEach(b=>{const on=!!activeSpecialties[b.dataset.cap];b.classList.toggle('on',on);b.setAttribute('aria-checked',on?'true':'false')});
+    }
+
+    // ── CAP-VIZ (C5-LEGEND): map rating legend ─────────────────────────────
+    // A small, always-on key for the dot colors, top-left of the map under the
+    // search/filter bar. Reads the documented classification palette only.
+    const LEGEND_ITEMS=[
+        {label:'Exceptional',color:'#A0D8A0'},
+        {label:'Above Average',color:'#B8E6A0'},
+        {label:'Average',color:'#F8D08A'},
+        {label:'Below Average',color:'#F0B8A0'},
+        {label:'Poor',color:'#E8A0A0'},
+        {label:'Unrated',color:'#BDC3C7'}
+    ];
+    function buildLegend(){
+        const el=document.getElementById('map-legend');if(!el)return;
+        const rows=LEGEND_ITEMS.map(i=>'<span class="lg-row"><span class="lg-swatch" style="background:'+i.color+'"></span>'+escapeHtml(i.label)+'</span>').join('');
+        el.innerHTML='<div class="lg-title">Quality rating</div><div class="lg-rows">'+rows+'</div>'+
+            '<div class="lg-enf"><span class="lg-ring" aria-hidden="true"></span>Red ring = recent CMS enforcement (darker red = more severe)</div>';
     }
     function showLoading(a){const el=document.getElementById('query-loading');if(a)el.classList.add('active');else el.classList.remove('active')}
 
@@ -499,14 +689,14 @@
         const f=payload.facility||payload,comps=payload.components||[],enf=payload.enforcement||[];
         const hospEnf=payload.hospital_enforcement||[];
         const score=f.final_score!=null?f.final_score.toFixed(1):'—',cls=f.score_classification||'Unrated',stars=f.cms_overall_rating||null;
-        const compHtml=comps.length===0?'<div class="component-na">No component data</div>':comps.sort((a,b)=>(a.component_order||0)-(b.component_order||0)).map(c=>{const cs=c.component_score!=null?c.component_score.toFixed(1):'—';const wt=c.component_weight!=null?Math.round(c.component_weight*100)+'%':'';const fp=c.component_score!=null?Math.max(0,Math.min(100,(c.component_score/10)*100)):0;return'<div><div class="component-row"><div class="component-name">'+escapeHtml(c.component_name||'')+'</div><div class="component-weight">'+wt+'</div><div class="component-score">'+cs+'</div></div><div class="component-bar"><div class="component-bar-fill" style="width:'+fp+'%;background:'+scoreToBarColor(c.component_score)+'"></div></div></div>'}).join('');
+        const compHtml=comps.length===0?'<div class="component-na">No component data</div>':comps.sort((a,b)=>(a.component_order||0)-(b.component_order||0)).map(c=>{const cs=c.component_score!=null?c.component_score.toFixed(1):'—';const fp=c.component_score!=null?Math.max(0,Math.min(100,(c.component_score/10)*100)):0;return'<div><div class="component-row"><div class="component-name">'+escapeHtml(c.component_name||'')+'</div><div class="component-score">'+cs+'</div></div><div class="component-bar"><div class="component-bar-fill" style="width:'+fp+'%;background:'+scoreToBarColor(c.component_score)+'"></div></div></div>'}).join('');
         const badges=[];if(truthy(f.teaching_status))badges.push('Teaching');if(truthy(f.has_cardiac_cath_lab))badges.push('Cardiac Cath');if(truthy(f.has_cardiac_surgery))badges.push('Cardiac Surgery');if(truthy(f.nicu_level))badges.push('NICU');if(truthy(f.has_trauma_center))badges.push('Trauma Center');if(truthy(f.has_burn_unit))badges.push('Burn Unit');if(truthy(f.has_organ_transplant))badges.push('Transplant');if(truthy(f.has_mri))badges.push('MRI');if(f.case_mix_index!=null)badges.push('CMI '+Number(f.case_mix_index).toFixed(2));
         const bHtml=badges.length?'<div class="specialty-badges">'+badges.map(b=>'<span class="spec-badge">'+escapeHtml(b)+'</span>').join('')+'</div>':'';
         const eHtml=enf.length?'<div class="enforcement-block"><div class="enforcement-title"><i class="fas fa-gavel"></i> '+enf.length+' regulatory action'+(enf.length===1?'':'s')+'</div>'+enf.slice(0,5).map(e=>'<div class="enforcement-amt">'+escapeHtml(e.penalty_type||'Penalty')+(e.amount?' · $'+Number(e.amount).toLocaleString():'')+(e.penalty_date?' · '+escapeHtml(String(e.penalty_date).slice(0,10)):'')+'</div>').join('')+(enf.length>5?'<div class="enforcement-amt">+ '+(enf.length-5)+' more</div>':'')+'</div>':'';
         const cmsLine=stars?'<span class="cms-stars">CMS overall: '+'<i class="fas fa-star star-icon"></i>'.repeat(Math.round(stars))+' '+stars+'/5</span>':'';
         const psHtml=buildPatientSummary(f,hospEnf);
         const enfVizHtml=buildEnforcementHtml(f,hospEnf);
-        return'<div class="facility-info"><div class="detail-header-actions"><button class="detail-action-btn" type="button" onclick="copyFacilityLink(\''+escapeHtml(f.facility_id)+'\')" aria-label="Copy link" title="Copy link"><i class="fas fa-link"></i></button><button class="detail-action-btn" type="button" onclick="shareFacility(\''+escapeHtml(f.facility_id)+'\',\''+escapeHtml(f.facility_name)+'\')" aria-label="Share" title="Share"><i class="fas fa-share-nodes"></i></button><button class="detail-action-btn" type="button" data-pin onclick="togglePinPanel()" aria-label="Pin" title="Pin"><i class="fas fa-thumbtack"></i></button><button class="detail-action-btn" type="button" onclick="closeFacilityInfo()" aria-label="Close" title="Close"><i class="fas fa-times"></i></button></div><div class="facility-header"><h2 class="facility-name">'+escapeHtml(f.facility_name||'')+'</h2><div class="facility-type-line">'+escapeHtml(TYPE_LABEL[f.facility_type]||f.facility_type||'')+'</div><div class="score-block"><div class="score-circle '+(cls==='Unrated'?'unrated':'')+'" style="background:'+classColor(cls)+'">'+score+'</div><div class="score-meta"><span class="classification-badge '+classBadgeClass(cls)+'" style="background:'+classColor(cls)+'">'+escapeHtml(cls)+'</span><span class="score-out-of">FTP score · 1 (weakest) to 10 (strongest)</span>'+cmsLine+'</div></div>'+bHtml+'</div>'+psHtml+'<h3 class="section-header">Component breakdown</h3><p class="section-note">The score is a weighted blend of these measures. Each runs 1–10; the percentage is how much it counts toward the total.</p>'+compHtml+eHtml+enfVizHtml+'<div class="addr-block">'+(f.address?'<div><i class="fas fa-map-marker-alt"></i>'+escapeHtml(f.address||'')+'</div>':'')+'<div style="padding-left:20px">'+escapeHtml(f.city||'')+(f.city?', ':'')+escapeHtml(f.state||'')+' '+escapeHtml(f.zip_code||'')+'</div>'+(f.phone?'<div><i class="fas fa-phone"></i>'+escapeHtml(f.phone)+'</div>':'')+'</div><a href="https://maps.google.com/?q='+f.latitude+','+f.longitude+'" target="_blank" rel="noopener noreferrer" class="directions-btn">Get Directions</a><div class="print-methodology-url">Methodology: https://forthepatient.org/methodology</div></div>';
+        return'<div class="facility-info"><div class="detail-header-actions"><button class="detail-action-btn" type="button" onclick="copyFacilityLink(\''+escapeHtml(f.facility_id)+'\')" aria-label="Copy link" title="Copy link"><i class="fas fa-link"></i></button><button class="detail-action-btn" type="button" onclick="shareFacility(\''+escapeHtml(f.facility_id)+'\',\''+escapeHtml(f.facility_name)+'\')" aria-label="Share" title="Share"><i class="fas fa-share-nodes"></i></button><button class="detail-action-btn" type="button" data-pin onclick="togglePinPanel()" aria-label="Pin" title="Pin"><i class="fas fa-thumbtack"></i></button><button class="detail-action-btn" type="button" onclick="closeFacilityInfo()" aria-label="Close" title="Close"><i class="fas fa-times"></i></button></div><div class="facility-header"><h2 class="facility-name">'+escapeHtml(f.facility_name||'')+'</h2><div class="facility-type-line">'+escapeHtml(TYPE_LABEL[f.facility_type]||f.facility_type||'')+'</div><div class="score-block"><div class="score-circle '+(cls==='Unrated'?'unrated':'')+'" style="background:'+classColor(cls)+'">'+score+'</div><div class="score-meta"><span class="classification-badge '+classBadgeClass(cls)+'" style="background:'+classColor(cls)+'">'+escapeHtml(cls)+'</span><span class="score-out-of">FTP score · 1 (weakest) to 10 (strongest)</span>'+cmsLine+'</div></div>'+bHtml+'</div>'+psHtml+'<h3 class="section-header">Component breakdown</h3><p class="section-note">The score combines these measures. Each is shown on the same 1&ndash;10 scale, so you can see where this facility is strong or weak.</p>'+compHtml+eHtml+enfVizHtml+'<div class="addr-block">'+(f.address?'<div><i class="fas fa-map-marker-alt"></i>'+escapeHtml(f.address||'')+'</div>':'')+'<div style="padding-left:20px">'+escapeHtml(f.city||'')+(f.city?', ':'')+escapeHtml(f.state||'')+' '+escapeHtml(f.zip_code||'')+'</div>'+(f.phone?'<div><i class="fas fa-phone"></i>'+escapeHtml(f.phone)+'</div>':'')+'</div><a href="https://maps.google.com/?q='+f.latitude+','+f.longitude+'" target="_blank" rel="noopener noreferrer" class="directions-btn">Get Directions</a><div class="print-methodology-url">Methodology: https://forthepatient.org/methodology</div></div>';
     }
 
     function closeFacilityInfo(){
@@ -659,7 +849,12 @@
         const rows=visibleFacilities().slice();
         if(o)rows.forEach(r=>{r._dist=(r.latitude!=null&&r.longitude!=null)?haversineMiles(o.lat,o.lng,r.latitude,r.longitude):Infinity});
         if(o)rows.sort((a,b)=>(a._dist||Infinity)-(b._dist||Infinity));
-        if(!rows.length){showSheetGuide(enforcementOnly&&currentFacilities.length?'no-enf':'empty');return}
+        if(!rows.length){
+            const capActive=capabilityCount()>0;
+            if(enforcementOnly&&!capabilityClientFilter(currentFacilities.filter(f=>!!f.has_active_enforcement)).length&&currentFacilities.some(f=>!!f.has_active_enforcement)){showSheetGuide('no-enf');return}
+            if(capActive&&currentFacilities.length){showSheetGuide('no-cap');return}
+            showSheetGuide(enforcementOnly&&currentFacilities.length?'no-enf':'empty');return;
+        }
         const CAP=60,shown=rows.slice(0,CAP);
         let html=shown.map(f=>{
             const cls=f.score_classification||'Unrated',sc=classColor(cls),st=f.final_score!=null?f.final_score.toFixed(1):'—';
@@ -686,6 +881,7 @@
         else if(kind==='state-loading'){icon='fa-spinner fa-spin';h='Loading facilities…';p='One moment.';}
         else if(kind==='no-types'){icon='fa-filter';h='No types selected';p='Pick at least one facility type above to see results.';}
         else if(kind==='no-enf'){icon='fa-gavel';h='No flagged facilities here';p='None of the facilities in view are under recent CMS enforcement. Turn off the filter to see all of them, or move the map.';}
+        else if(kind==='no-cap'){icon='fa-list-check';h='No facilities match every capability';p='None of the facilities here have all the capabilities you selected. Remove a requirement in Capabilities, or move the map.';}
         wrap.innerHTML='<div class="sheet-guide"><i class="fas '+icon+'" aria-hidden="true"></i><h4>'+h+'</h4><p>'+p+'</p></div>'+sheetLinksHtml();
     }
     // Slow-GPS state: the 4s timeout fired but we're still listening in the
