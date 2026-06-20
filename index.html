@@ -1,4 +1,25 @@
 <!--
+  ForThePatient.org v5.4 (Session TRANSLATE-1 — June 2026)
+  Plain-language patient summary on the detail card (closes S-4). CSS-only here;
+  all logic is in app.js v1.1. Pure frontend; consumes the live B-ENF-FLAG
+  contract read-only — no backend/scoring/schema changes.
+  Changelog vs v5.3:
+    T1-CSS: .patient-summary block — a calm "What this means for you" reading
+          placed first in the detail-card body, on BOTH the desktop side panel and
+          the mobile sheet (shared buildFacilityDetailHtml). A left accent bar
+          shifts with the overall tone (good/mid/low/flag). Colors are the
+          documented classification palette + accent + the existing #C0392B tint;
+          the one good-tone bar (#5FA85F) is a darker shade of --cls-excep used
+          only as a 4px accent (same treatment Invariant #18 grants the banner-icon
+          tints) — no new brand/surface color. Also: .section-note (a one-line
+          plain-language helper under "Component breakdown") and a clearer
+          "1 (weakest) to 10 (strongest)" score-scale label. Desktop (>768px)
+          layout otherwise unchanged (#29); sheet/modes/snaps/toggle/theme
+          preserved (#30). The app.js v1.1 logic (buildPatientSummary) renders the
+          copy; see its header for the percentile-phrasing and NULL-fallback
+          decisions (Q-40).
+-->
+<!--
   ForThePatient.org v5.3 (Session ENF-VIZ-2 — June 2026)
   Enforcement filter + state drill-down dots + collapsed survey findings.
   Pure frontend; no backend/scoring/schema changes. Consumes the live B-ENF-FLAG
@@ -437,6 +458,30 @@
         .enf-disc-btn .ed-caret{flex-shrink:0;color:var(--text-secondary);font-size:.7rem}
         .enf-disc-panel[hidden]{display:none}
         .enf-disc-panel{margin-top:4px}
+        /* ── TRANSLATE-1: plain-language patient summary ───────────────────────
+           A calm reading of the data, placed first in the card body (persona-1
+           wins). The left accent bar shifts with the overall tone; every color is
+           from the documented classification palette / accent — no new colors
+           (Invariant #18). Distinct from the alarm-toned .enf-banner. */
+        .patient-summary{margin:16px 0 4px;padding:14px 16px 12px;border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:10px;background:var(--hover-bg)}
+        .patient-summary .ps-eyebrow{display:flex;align-items:center;gap:7px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);margin-bottom:8px}
+        .patient-summary .ps-eyebrow i{font-size:.78rem;color:var(--accent)}
+        .patient-summary .ps-line{font-size:.92rem;line-height:1.5;color:var(--text-primary);margin:0 0 8px}
+        .patient-summary .ps-line:last-of-type{margin-bottom:6px}
+        .patient-summary .ps-foot{font-size:.7rem;color:var(--text-secondary);line-height:1.45;border-top:1px solid var(--border);padding-top:8px;margin-top:2px}
+        .patient-summary .ps-foot a{color:var(--accent);text-decoration:none}
+        .patient-summary .ps-foot a:hover{text-decoration:underline}
+        /* tone bar + eyebrow icon by overall reading */
+        .patient-summary.tone-good{border-left-color:#5FA85F}
+        .patient-summary.tone-good .ps-eyebrow i{color:#5FA85F}
+        .patient-summary.tone-mid{border-left-color:var(--accent)}
+        .patient-summary.tone-low{border-left-color:#C0392B}
+        .patient-summary.tone-low .ps-eyebrow i{color:#C0392B}
+        .patient-summary.tone-flag{border-left-color:#C0392B;background:rgba(232,160,160,.12)}
+        .patient-summary.tone-flag .ps-eyebrow i{color:#C0392B}
+        [data-theme="dark"] .patient-summary.tone-good{border-left-color:#A0D8A0}
+        [data-theme="dark"] .patient-summary.tone-good .ps-eyebrow i{color:#A0D8A0}
+        .section-note{font-size:.74rem;color:var(--text-secondary);line-height:1.45;margin:-4px 0 10px}
         .print-methodology-url{display:none}
     </style>
 </head>
