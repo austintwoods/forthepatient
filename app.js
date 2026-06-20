@@ -1,3 +1,35 @@
+    /*
+      ForThePatient.org — app.js v1.1 (Session TRANSLATE-1 — June 2026)
+      Plain-language patient summary on the detail card (closes S-4). Pure
+      frontend; consumes the live B-ENF-FLAG contract (state_percentile +
+      enforcement_severity) read-only — NO new RPC, NO schema change.
+      Changelog vs v1.0:
+        T1-1: buildPatientSummary(f,hist) — a calm, second-person reading rendered
+              at the TOP of the card body (primary path; persona-1 wins), fed by
+              the shared buildFacilityDetailHtml so it appears in BOTH the desktop
+              side panel and the mobile sheet (Invariants #29/#30). Order: (1) the
+              enforcement flag — the "is anything wrong here" answer — then (2) the
+              quality reading (score + classification + state percentile), then
+              (3) proximity (reuses the existing geolocation + haversineMiles; no
+              new math). Coherent for the flagged-but-scores-well case (Q-15): the
+              flag leads, then "Setting the enforcement flag aside, its … score is".
+        T1-2: Percentile phrasing (Q-40) = "better than about X% of <State> <peers>"
+              + a directional cue (near the bottom / around the middle / near the
+              top). This is the literal percentile definition and never inverts.
+              pctWhole() rounds half-up and clamps 1..99 (never "0%"/"100%").
+        T1-3: NULL state_percentile (Q-40) split into two honest, never-blank cases:
+              Unrated (no score at all → "not enough public data to rate") vs a
+              scored facility with too few in-state same-type peers to rank. Never
+              prints "0th percentile", "null", or a blank.
+        T1-4: Glossary-in-context (not a separate page): the score line now reads
+              "1 (weakest) to 10 (strongest)" and a one-line .section-note under
+              "Component breakdown" explains the weighting in plain words.
+        T1-5: All facility-derived strings routed through escapeHtml (#15). No new
+              deps (#17). New colors: none beyond the existing #C0392B tint and one
+              darker shade of the documented --cls-excep green (#5FA85F), confined
+              to a 4px accent bar — same treatment Invariant #18 already grants the
+              banner-icon tints. No build step; two static files (#16).
+    */
     const SUPABASE_URL='https://nhajnwffxlztmoadqcdl.supabase.co';
     const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5oYWpud2ZmeGx6dG1vYWRxY2RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTA1NzAsImV4cCI6MjA4ODMyNjU3MH0.lUVbH_ka0LS8B6xuQJG8KuOdwgk7lTejl9dPfzSUHwQ';
     const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
@@ -302,6 +334,113 @@
 
     function buildSkeletonHtml(){return'<div class="facility-info" style="padding-top:14px"><div style="display:flex;justify-content:flex-end;gap:4px;margin-bottom:8px"><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div></div><div class="skeleton-block skeleton-line w70"></div><div class="skeleton-block skeleton-line w40" style="height:8px;margin-bottom:14px"></div><div style="display:flex;gap:14px;align-items:center;margin-bottom:20px"><div class="skeleton-block skeleton-circle"></div><div style="flex:1"><div class="skeleton-block skeleton-line w50"></div><div class="skeleton-block skeleton-line w40" style="height:8px"></div></div></div><div class="skeleton-block skeleton-line w40" style="height:8px;margin-bottom:14px"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div style="margin-top:18px"><div class="skeleton-block skeleton-line w70"></div><div class="skeleton-block skeleton-line w50"></div></div></div>'}
 
+    // ── TRANSLATE-1: plain-language patient summary (S-4) ──────────────────
+    // A calm, second-person reading that synthesizes, in this order:
+    //   (1) is anything wrong here  (enforcement flag — the persona-1 question)
+    //   (2) how good is the quality  (score + classification + state percentile)
+    //   (3) how close is it          (reused "Near me" geolocation, no new math)
+    // It is the LANGUAGE layer over data already on the card — no new RPC, no new
+    // statistic. The same builder feeds the desktop side panel and the mobile
+    // sheet (Invariants #29/#30). Every facility-derived string is escaped (#15).
+    //
+    // Q-40 (percentile phrasing) is resolved as "better than ~X% of peers": that
+    // is the literal definition of a percentile, it never inverts, and it stays
+    // positive for strong facilities. A plain directional cue ("near the bottom"
+    // / "around the middle" / "near the top") carries the gist so a stressed
+    // reader needn't do the arithmetic; the % is supporting detail. NULL is split
+    // into two honest cases and NEVER prints "0th"/"null"/blank: an Unrated
+    // facility ("not enough public data to rate") vs a scored facility with too
+    // few in-state same-type peers to rank ("too few comparable … to rank").
+
+    // Round-half-up to a whole percent for display (avoids "15.6th"); clamps 1..99
+    // so we never say "0%" or "100%" of peers.
+    function pctWhole(p){const n=Math.round(Number(p));return Math.max(1,Math.min(99,n))}
+    // Map a percentile to a plain directional phrase + a tone token (drives accent).
+    function pctBand(p){
+        if(p>=80)return{word:'near the top',tone:'good'};
+        if(p>=60)return{word:'in the upper range',tone:'good'};
+        if(p>=40)return{word:'around the middle',tone:'mid'};
+        if(p>=20)return{word:'in the lower range',tone:'low'};
+        return{word:'near the bottom',tone:'low'};
+    }
+    // Plain reading of the 1-10 score for someone who has never seen the scale.
+    function scoreBand(s){
+        if(s==null)return{word:'',tone:'mid'};
+        if(s>=7.5)return{word:'a strong quality record',tone:'good'};
+        if(s>=6)return{word:'an above-average quality record',tone:'good'};
+        if(s>=4.5)return{word:'a middle-of-the-pack quality record',tone:'mid'};
+        if(s>=3)return{word:'a below-average quality record',tone:'low'};
+        return{word:'a weak quality record',tone:'low'};
+    }
+    function stateName(abbr){const s=STATE_BY_ABBR[abbr];return s?s.n:null}
+    // Type noun for one facility, lowercased and singular-ish, for "… of N.C. hospitals".
+    function peerNoun(t){const m={hospital:'hospitals',nursing_home:'nursing homes',dialysis:'dialysis centers',home_health:'home-health agencies',hospice:'hospices',irf:'rehab facilities',ltch:'long-term care hospitals'};return m[t]||'facilities'}
+
+    function buildPatientSummary(f,hist){
+        if(!f)return'';
+        const score=(f.final_score!=null)?Number(f.final_score):null;
+        const cls=f.score_classification||'Unrated';
+        const unrated=(score==null)||cls==='Unrated';
+        const flagged=!!f.has_active_enforcement;
+        const sev=normSev(f.enforcement_severity);
+        const rawPct=(f.state_percentile==null)?null:Number(f.state_percentile);
+        const hasPct=(rawPct!=null&&!isNaN(rawPct));
+        const sName=stateName(f.state);
+        const peers=peerNoun(f.facility_type);
+
+        const parts=[];   // each entry: {t: text, tone: 'good'|'mid'|'low'|'flag'}
+
+        // (1) Enforcement first — the "is anything wrong here" answer.
+        if(flagged){
+            const sevWord=sev?(sev.charAt(0)+sev.slice(1).toLowerCase()):null;
+            if(sev&&SEV_RANK[sev]>=3){
+                parts.push({t:'This facility is currently under active Medicare enforcement for '+(sevWord?escapeHtml(sevWord.toLowerCase())+'-severity ':'')+'safety problems. If you have other options nearby, they may be the safer choice. If this is your only option, ask about recent improvements and know your rights as a patient.',tone:'flag'});
+            }else{
+                parts.push({t:'This facility has a current, unresolved CMS survey finding on record'+(sevWord?' ('+escapeHtml(sevWord.toLowerCase())+' severity)':'')+'. It is worth asking the facility what has been done to address it.',tone:'flag'});
+            }
+        }
+
+        // (2) Quality reading — score + classification + state percentile.
+        if(unrated){
+            parts.push({t:'There isn\u2019t enough public Medicare data to give this facility a quality score yet, so it is shown as Unrated. That is not a mark against it \u2014 it means the data needed to rate it isn\u2019t available.',tone:'mid'});
+        }else{
+            const sb=scoreBand(score);
+            const lead=flagged?'Setting the enforcement flag aside, its overall quality score is':'Its overall quality score is';
+            let sentence=lead+' '+score.toFixed(1)+' out of 10 \u2014 '+sb.word+'.';
+            // Percentile clause, when we can rank it.
+            if(hasPct){
+                const w=pctWhole(rawPct),band=pctBand(rawPct);
+                const where=sName?(' of '+escapeHtml(sName)+' '+peers):(' of '+peers+' in its state');
+                sentence+=' That places it '+band.word+' \u2014 better than about '+w+'%'+where+'.';
+                parts.push({t:sentence,tone:band.tone});
+            }else{
+                // scored, but no percentile: too few in-state same-type peers to rank.
+                sentence+=' There are too few comparable '+peers+(sName?(' in '+escapeHtml(sName)):'')+' to rank it against its peers.';
+                parts.push({t:sentence,tone:sb.tone});
+            }
+        }
+
+        // (3) Proximity — reuse the existing geolocation/distance, no new math.
+        const o=originForDistance();
+        if(o&&f.latitude!=null&&f.longitude!=null&&userLocation){
+            const mi=haversineMiles(o.lat,o.lng,Number(f.latitude),Number(f.longitude));
+            if(isFinite(mi)){
+                const miStr=mi<10?mi.toFixed(1):String(Math.round(mi));
+                parts.push({t:'It is about '+miStr+' mile'+((miStr==='1'||miStr==='1.0')?'':'s')+' from your current location.',tone:'mid'});
+            }
+        }
+
+        if(!parts.length)return'';
+        // Overall tone: a live flag dominates; otherwise the quality reading leads.
+        const tone=flagged?'flag':(parts[0]?parts[0].tone:'mid');
+        const body=parts.map(p=>'<p class="ps-line">'+p.t+'</p>').join('');
+        return'<div class="patient-summary tone-'+tone+'" role="note" aria-label="Plain-language summary">'+
+            '<div class="ps-eyebrow"><i class="fas fa-circle-info" aria-hidden="true"></i> What this means for you</div>'+
+            body+
+            '<div class="ps-foot">A plain-language reading of the data below. <a href="/methodology">How we score</a>.</div>'+
+        '</div>';
+    }
+
     // ── ENF-VIZ: hospital enforcement banner + survey history ──────────────
     // facility.enforcement_severity is UNGATED here, so it may be a historical
     // (expired) label when has_active_enforcement is false. Label accordingly.
@@ -365,8 +504,9 @@
         const bHtml=badges.length?'<div class="specialty-badges">'+badges.map(b=>'<span class="spec-badge">'+escapeHtml(b)+'</span>').join('')+'</div>':'';
         const eHtml=enf.length?'<div class="enforcement-block"><div class="enforcement-title"><i class="fas fa-gavel"></i> '+enf.length+' regulatory action'+(enf.length===1?'':'s')+'</div>'+enf.slice(0,5).map(e=>'<div class="enforcement-amt">'+escapeHtml(e.penalty_type||'Penalty')+(e.amount?' · $'+Number(e.amount).toLocaleString():'')+(e.penalty_date?' · '+escapeHtml(String(e.penalty_date).slice(0,10)):'')+'</div>').join('')+(enf.length>5?'<div class="enforcement-amt">+ '+(enf.length-5)+' more</div>':'')+'</div>':'';
         const cmsLine=stars?'<span class="cms-stars">CMS overall: '+'<i class="fas fa-star star-icon"></i>'.repeat(Math.round(stars))+' '+stars+'/5</span>':'';
+        const psHtml=buildPatientSummary(f,hospEnf);
         const enfVizHtml=buildEnforcementHtml(f,hospEnf);
-        return'<div class="facility-info"><div class="detail-header-actions"><button class="detail-action-btn" type="button" onclick="copyFacilityLink(\''+escapeHtml(f.facility_id)+'\')" aria-label="Copy link" title="Copy link"><i class="fas fa-link"></i></button><button class="detail-action-btn" type="button" onclick="shareFacility(\''+escapeHtml(f.facility_id)+'\',\''+escapeHtml(f.facility_name)+'\')" aria-label="Share" title="Share"><i class="fas fa-share-nodes"></i></button><button class="detail-action-btn" type="button" data-pin onclick="togglePinPanel()" aria-label="Pin" title="Pin"><i class="fas fa-thumbtack"></i></button><button class="detail-action-btn" type="button" onclick="closeFacilityInfo()" aria-label="Close" title="Close"><i class="fas fa-times"></i></button></div><div class="facility-header"><h2 class="facility-name">'+escapeHtml(f.facility_name||'')+'</h2><div class="facility-type-line">'+escapeHtml(TYPE_LABEL[f.facility_type]||f.facility_type||'')+'</div><div class="score-block"><div class="score-circle '+(cls==='Unrated'?'unrated':'')+'" style="background:'+classColor(cls)+'">'+score+'</div><div class="score-meta"><span class="classification-badge '+classBadgeClass(cls)+'" style="background:'+classColor(cls)+'">'+escapeHtml(cls)+'</span><span class="score-out-of">FTP score · 10-point scale</span>'+cmsLine+'</div></div>'+bHtml+'</div><h3 class="section-header">Component breakdown</h3>'+compHtml+eHtml+enfVizHtml+'<div class="addr-block">'+(f.address?'<div><i class="fas fa-map-marker-alt"></i>'+escapeHtml(f.address||'')+'</div>':'')+'<div style="padding-left:20px">'+escapeHtml(f.city||'')+(f.city?', ':'')+escapeHtml(f.state||'')+' '+escapeHtml(f.zip_code||'')+'</div>'+(f.phone?'<div><i class="fas fa-phone"></i>'+escapeHtml(f.phone)+'</div>':'')+'</div><a href="https://maps.google.com/?q='+f.latitude+','+f.longitude+'" target="_blank" rel="noopener noreferrer" class="directions-btn">Get Directions</a><div class="print-methodology-url">Methodology: https://forthepatient.org/methodology</div></div>';
+        return'<div class="facility-info"><div class="detail-header-actions"><button class="detail-action-btn" type="button" onclick="copyFacilityLink(\''+escapeHtml(f.facility_id)+'\')" aria-label="Copy link" title="Copy link"><i class="fas fa-link"></i></button><button class="detail-action-btn" type="button" onclick="shareFacility(\''+escapeHtml(f.facility_id)+'\',\''+escapeHtml(f.facility_name)+'\')" aria-label="Share" title="Share"><i class="fas fa-share-nodes"></i></button><button class="detail-action-btn" type="button" data-pin onclick="togglePinPanel()" aria-label="Pin" title="Pin"><i class="fas fa-thumbtack"></i></button><button class="detail-action-btn" type="button" onclick="closeFacilityInfo()" aria-label="Close" title="Close"><i class="fas fa-times"></i></button></div><div class="facility-header"><h2 class="facility-name">'+escapeHtml(f.facility_name||'')+'</h2><div class="facility-type-line">'+escapeHtml(TYPE_LABEL[f.facility_type]||f.facility_type||'')+'</div><div class="score-block"><div class="score-circle '+(cls==='Unrated'?'unrated':'')+'" style="background:'+classColor(cls)+'">'+score+'</div><div class="score-meta"><span class="classification-badge '+classBadgeClass(cls)+'" style="background:'+classColor(cls)+'">'+escapeHtml(cls)+'</span><span class="score-out-of">FTP score · 1 (weakest) to 10 (strongest)</span>'+cmsLine+'</div></div>'+bHtml+'</div>'+psHtml+'<h3 class="section-header">Component breakdown</h3><p class="section-note">The score is a weighted blend of these measures. Each runs 1–10; the percentage is how much it counts toward the total.</p>'+compHtml+eHtml+enfVizHtml+'<div class="addr-block">'+(f.address?'<div><i class="fas fa-map-marker-alt"></i>'+escapeHtml(f.address||'')+'</div>':'')+'<div style="padding-left:20px">'+escapeHtml(f.city||'')+(f.city?', ':'')+escapeHtml(f.state||'')+' '+escapeHtml(f.zip_code||'')+'</div>'+(f.phone?'<div><i class="fas fa-phone"></i>'+escapeHtml(f.phone)+'</div>':'')+'</div><a href="https://maps.google.com/?q='+f.latitude+','+f.longitude+'" target="_blank" rel="noopener noreferrer" class="directions-btn">Get Directions</a><div class="print-methodology-url">Methodology: https://forthepatient.org/methodology</div></div>';
     }
 
     function closeFacilityInfo(){
