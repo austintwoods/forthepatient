@@ -1,4 +1,27 @@
 <!--
+  ForThePatient.org v5.8 (Session GEO-DOT — June 2026)
+  MOBILE-FORWARD frontend change (the geo dot also helps desktop, but the intent
+  is the mobile first-open experience). Pairs with app.js v1.4. No backend, RPC,
+  schema, or scoring change. DESKTOP (>768px) layout byte-for-byte unchanged
+  (Invariant #29): the only additions are a new map-marker style + its keyframes.
+  Changelog vs v5.7:
+    GEO-DOT (CSS here; logic in app.js v1.4): a slightly larger PULSING BLUE
+          "you are here" dot (.ftp-geo-dot) marks the visitor's exact geolocation
+          on the map so proximity to nearby facilities is readable at a glance.
+          Blue (#2D7DF6) is a deliberate NON-facility UI color — never a score,
+          classification, or enforcement signal (the documented Invariant #18
+          carve-out, same basis as the enforcement reds) — so it can't be mistaken
+          for a facility rating. White halo for legibility on any basemap; an
+          expanding pulse ring (respects prefers-reduced-motion → static dot).
+          Rendered in its own userLocationLayer, above the facility markers.
+    GEO-DEFAULT (logic in app.js v1.4): the DEFAULT mobile view on first open is
+          now the MAP (not the List). On geolocation success the user lands on the
+          map centered on their metro with the blue dot, and can toggle to List
+          with one tap. The List itself is unchanged — only the default view that
+          appears first changed. (sheetView already defaulted to 'map'; v1.4 simply
+          stops forcing 'list' in the geolocation success callback.)
+-->
+<!--
   ForThePatient.org v5.7 (Session MOBILE-CLOSE-FIX — June 2026)
   MOBILE-ONLY one-line hotfix. Pure CSS; no JS, markup, backend, RPC, schema,
   or scoring change. DESKTOP (>768px) byte-for-byte unchanged (Invariant #29).
@@ -504,6 +527,24 @@
             .enf-ring.sev-critical{animation:enfPulse 2s ease-in-out infinite}
         }
         @keyframes enfPulse{0%,100%{box-shadow:0 0 0 3px #B71C1C,0 0 6px 1px rgba(183,28,28,.6)}50%{box-shadow:0 0 0 3px #B71C1C,0 0 10px 3px rgba(183,28,28,.95)}}
+        /* ── GEO-DOT (v5.8): the visitor's own "you are here" location marker ──
+           A slightly larger PULSING BLUE dot (distinct from rating/score dots and
+           from the red enforcement rings) marking the user's exact position so
+           proximity to nearby facilities is readable at a glance. Blue (#2D7DF6)
+           is a deliberate non-facility UI color (the documented carve-out, like
+           the enforcement reds): it is never used for a score, classification, or
+           enforcement signal, so it can't be confused with a facility's rating.
+           A white halo keeps it legible on both light and dark basemaps; an
+           expanding pulse ring draws the eye. Reduced-motion users get a static
+           dot (no pulse). Non-interactive: it's a position marker, not a tap target. */
+        .ftp-geo-dot{position:relative;width:26px;height:26px;display:flex;align-items:center;justify-content:center;pointer-events:none}
+        .ftp-geo-dot .ftp-geo-core{position:relative;z-index:2;width:16px;height:16px;border-radius:50%;background:#2D7DF6;border:3px solid #fff;box-shadow:0 0 0 1px rgba(45,125,246,.55),0 1px 4px rgba(0,0,0,.35)}
+        .ftp-geo-dot .ftp-geo-pulse{position:absolute;top:50%;left:50%;width:16px;height:16px;border-radius:50%;background:rgba(45,125,246,.45);transform:translate(-50%,-50%);z-index:1}
+        [data-theme="dark"] .ftp-geo-dot .ftp-geo-core{border-color:#1A1F36}
+        @media(prefers-reduced-motion:no-preference){
+            .ftp-geo-dot .ftp-geo-pulse{animation:geoPulse 2.2s ease-out infinite}
+        }
+        @keyframes geoPulse{0%{transform:translate(-50%,-50%) scale(1);opacity:.7}70%{transform:translate(-50%,-50%) scale(3.2);opacity:0}100%{transform:translate(-50%,-50%) scale(3.2);opacity:0}}
         /* Detail card: enforcement banner + per-survey history */
         .enf-banner{display:flex;align-items:flex-start;gap:10px;margin-top:14px;padding:12px 14px;border-radius:8px;font-size:.82rem;border:1px solid}
         .enf-banner i{margin-top:1px;font-size:.95rem;flex-shrink:0}
