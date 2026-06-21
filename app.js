@@ -1,4 +1,22 @@
     /*
+      ForThePatient.org — app.js v1.4 (Session GEO-DOT — June 2026)
+      Adds the visitor's "you are here" map marker + makes the MAP the default
+      mobile view on first open. Pairs with index.html v5.8. Pure frontend;
+      consumes the live contract read-only — NO new RPC, NO new RPC PARAM, NO
+      schema/scoring change. DESKTOP behavior unchanged (Invariant #29).
+      Changelog vs v1.3:
+        GEO-DOT: new userLocationLayer (created LAST in initMap so it sits above
+              the facility markers) + renderUserLocation(), which drops a slightly
+              larger pulsing blue L.divIcon (.ftp-geo-dot; Invariant #7 — divIcon,
+              never circleMarker) at userLocation. Idempotent (clears the prior dot
+              before re-adding); no-op if geolocation was denied. The literal blue
+              lives in CSS; JS only emits the class (Invariant #8/#18 pattern).
+        GEO-DEFAULT: the first-load geolocation success callback NO LONGER forces
+              setSheetView('list') on mobile. sheetView already defaults to 'map'
+              and the load handler already ends on setSheetView('map'), so the user
+              now lands on the MAP (centered on their metro, with the blue dot) and
+              can toggle to List with one tap. Nothing else about the list changed.
+      ─────────────────────────────────────────────────────────────────────────
       ForThePatient.org — app.js v1.3 (Session MOBILE-CLEAN-1 — June 2026)
       Mobile-only redesign of the bottom surface + initial-geolocation zoom fix.
       Pure frontend; consumes the live B-ENF-FLAG contract read-only — NO new RPC,
@@ -137,7 +155,7 @@
     const dlog=DEBUG?console.log.bind(console,'[FTP]'):function(){};
     const derr=DEBUG?console.error.bind(console,'[FTP]'):function(){};
 
-    let map,facilityLayer,stateBubbleLayer,stateFacilityLayer;
+    let map,facilityLayer,stateBubbleLayer,stateFacilityLayer,userLocationLayer;
     let currentTheme='light',currentFacilities=[],openFacilityId=null;
     let activeTypes=new Set(['hospital']);
     let activeSpecialties={teaching:false,nicu:false,cath:false,trauma:false,er:false,cardsurg:false,mri:false,burn:false,transplant:false,highcmi:false};
@@ -194,6 +212,11 @@
         // two visual treatments (ordinary dot vs brighter state dot) stay separable.
         stateFacilityLayer=L.layerGroup().addTo(map);
         stateBubbleLayer=L.layerGroup().addTo(map);
+        // GEO-DOT (v5.8): a dedicated layer for the visitor's own location marker —
+        // added LAST so the pulsing blue "you are here" dot always renders ABOVE the
+        // facility markers/state bubbles. It is its own layer so it survives the
+        // clearLayers() calls that reset the facility/state layers on view changes.
+        userLocationLayer=L.layerGroup().addTo(map);
         wireCapabilityFilter();buildLegend();
         map.getContainer().addEventListener('touchstart',()=>{isTouching=true},{passive:true});
         map.getContainer().addEventListener('touchend',()=>{isTouching=false;if(pendingFetch){pendingFetch=false;onViewChange()}},{passive:true});
@@ -210,11 +233,15 @@
                 navigator.geolocation.getCurrentPosition(pos=>{
                     // MC1-ZOOM (request #1): land on the visitor's METRO area, not a
                     // multi-state regional view. Set userLocation so the nearby list
-                    // is distance-sorted from the first paint, and (on mobile) open
-                    // the list so they immediately see facilities near them.
+                    // is distance-sorted from the first paint.
+                    // v5.8 (GEO-DEFAULT + GEO-DOT): the DEFAULT mobile view is the MAP
+                    // (not the list) — more intuitive on first open; the user sees the
+                    // map with their own location and can toggle to List with one tap.
+                    // The pulsing blue "you are here" dot marks their exact position so
+                    // they can read their proximity to nearby facilities at a glance.
                     userLocation={lat:pos.coords.latitude,lng:pos.coords.longitude};
                     map.setView([pos.coords.latitude,pos.coords.longitude],11);
-                    if(isMobile)setSheetView('list');
+                    renderUserLocation();
                 },()=>onViewChange(),{timeout:6000,maximumAge:120000});
             }else{onViewChange()}
         });
@@ -225,6 +252,25 @@
     }
 
     async function loadStateSummary(){try{const{data,error}=await sb.from('state_summary').select('*');if(error)throw error;stateSummaryCache=data||[];dlog('state_summary:',stateSummaryCache.length,'rows')}catch(e){derr('state_summary failed:',e);stateSummaryCache=[]}}
+
+    // ── GEO-DOT (v5.8): the visitor's own location marker ────────────────────
+    // A slightly larger pulsing BLUE dot marking exactly where the user is, so
+    // they can judge their proximity to nearby facilities at a glance. It is
+    // deliberately distinct from facility markers: blue (never a rating/score or
+    // enforcement color — Invariant #18 carve-out for a non-facility UI marker),
+    // a soft expanding pulse ring, and a white halo so it reads on any basemap.
+    // Rendered into its own userLocationLayer (kept above the facility markers).
+    // Uses L.divIcon, never circleMarker (Invariant #7); the literal blue lives
+    // in CSS (.ftp-geo-dot), JS only emits the class. Idempotent: re-rendering
+    // clears the prior dot first, so it never stacks. No-op if no userLocation
+    // or no map yet (e.g. geolocation denied — the dot simply never appears).
+    function renderUserLocation(){
+        if(!map||!userLocationLayer||!userLocation)return;
+        userLocationLayer.clearLayers();
+        const icon=L.divIcon({className:'',html:'<div class="ftp-geo-dot" role="img" aria-label="Your location"><span class="ftp-geo-pulse" aria-hidden="true"></span><span class="ftp-geo-core" aria-hidden="true"></span></div>',iconSize:[26,26],iconAnchor:[13,13]});
+        const m=L.marker([userLocation.lat,userLocation.lng],{icon,interactive:false,keyboard:false,zIndexOffset:1000});
+        userLocationLayer.addLayer(m);
+    }
 
     function onViewChange(){
         if(!map)return;
