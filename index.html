@@ -1,4 +1,44 @@
 <!--
+  ForThePatient.org v5.6 (Session MOBILE-CLEAN-1 — June 2026)
+  Mobile-only redesign of the bottom surface + initial-geolocation zoom fix.
+  Pure frontend; consumes the live B-ENF-FLAG contract read-only — NO backend/
+  scoring/schema change, NO new RPC, NO new RPC param (Invariant #6). DESKTOP
+  (>768px) IS BYTE-FOR-BYTE UNCHANGED (Invariant #29): every change below is
+  inside the mobile markup, the @media(max-width:768px) query, or the shared
+  detail-card/geolocation logic guarded by isMobile.
+  Changelog vs v5.5:
+    MC1-ZOOM: On first load, if the visitor allows geolocation, the map now
+          centers on their METRO area (zoom 11) instead of the old regional
+          zoom 6 that showed several states. userLocation is also set so the
+          nearby list is distance-sorted immediately. (app.js initMap.)
+    MC1-STATIC-BAR: The mobile bottom surface is no longer a draggable
+          peek/half/full "home sheet." It is a STATIC control bar — the
+          List/Map toggle on top, the facility-type chips below — and nothing
+          else. The facility search box, the "Near me" button, the "Recent CMS
+          enforcement" toggle, and the in-sheet Capabilities panel were all
+          REMOVED from the mobile surface to declutter it (request #2). (Geo is
+          already granted, so "Near me" was redundant; name-search remains
+          reachable on desktop and via deep links.)
+    MC1-LIST-COVERS: Tapping LIST expands the sheet to cover the map and shows
+          the scrollable nearby list under the same static bar. Tapping MAP
+          collapses it back to just the bar — the list can NEVER peek through
+          in Map view (request #4). Heights are CSS-driven off [data-view]/
+          [data-mode] on #detail-sheet — no JS-measured drag heights, no
+          touch-drag handle (the .sheet-handle element is gone).
+    MC1-DETAIL-EXIT: The facility detail card is a full overlay with a STICKY
+          header bar carrying a prominent Back (to the list) and Close (×). A
+          patient can never get stuck on a card (request #3). The redundant
+          in-content header-actions row is hidden on mobile.
+    MC1-DECLUTTER: General mobile visual pass (request #5): single-row
+          scrollable chip rail, larger touch targets, cleaner spacing, and the
+          map reserves space so the static bar never overlaps it. This is the
+          first of possibly several mobile-polish passes (see MOBILE-CLEAN-2
+          in the handoff).
+    Desktop unchanged: the floating filter bar (with the enforcement chip and
+          the Capabilities dropdown), the side info-panel, the map legend, and
+          name-search are all exactly as in v5.5.
+-->
+<!--
   ForThePatient.org v5.5 (Session CAP-VIZ — June 2026)
   Capability filter + de-clustered markers + red enforcement gradient + component-
   weight removal + map legend. CSS + markup here; logic in app.js v1.2. Pure
@@ -283,11 +323,15 @@
         .footer-bar a{color:var(--text-secondary);text-decoration:none;transition:color .15s;flex-shrink:0}
         .footer-bar a:hover{color:var(--accent)}
 
-        .bottom-sheet{display:none;position:fixed;left:0;right:0;bottom:0;z-index:800;background:var(--card-bg);border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.12);height:0;max-height:90vh;max-height:90dvh;overflow:hidden;transition:height .3s cubic-bezier(.25,.1,.25,1);touch-action:none;flex-direction:column;box-sizing:border-box}
-        .sheet-handle{display:flex;justify-content:center;padding:10px 0 6px;cursor:grab;flex-shrink:0;touch-action:none}
-        .sheet-handle::after{content:'';width:40px;height:4px;background:var(--border);border-radius:2px}
-        .sheet-close-btn{position:absolute;top:6px;right:10px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:none;border:none;color:var(--text-secondary);font-size:1rem;cursor:pointer;z-index:10;border-radius:8px;font-family:inherit;padding:0}
-        .sheet-close-btn:hover,.sheet-close-btn:focus-visible{background:var(--hover-bg);color:var(--text-primary)}
+        /* ── MOBILE-CLEAN-1 (v5.6): static control bar, no draggable snaps ──────
+           The mobile bottom surface has three discrete, CSS-driven states set via
+           a data-view / data-mode attribute on #detail-sheet — never a JS-measured
+           drag height. MAP = a fixed bar (toggle + chips). LIST = the same bar with
+           the scroll region expanded to cover the map. DETAIL = a full overlay with
+           a sticky Close header. */
+        .bottom-sheet{display:none;position:fixed;left:0;right:0;bottom:0;z-index:800;background:var(--card-bg);border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.12);max-height:100dvh;overflow:hidden;flex-direction:column;box-sizing:border-box;transition:height .28s cubic-bezier(.25,.1,.25,1)}
+        .sheet-close-btn{display:flex;align-items:center;justify-content:center;width:42px;height:42px;background:var(--hover-bg);border:none;color:var(--text-primary);font-size:1.05rem;cursor:pointer;border-radius:10px;font-family:inherit;padding:0;flex-shrink:0}
+        .sheet-close-btn:hover,.sheet-close-btn:focus-visible{background:var(--button-hover)}
         .sheet-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:0 0 calc(20px + var(--safe-bottom))}
 
         ::-webkit-scrollbar{width:6px;height:6px}
@@ -320,6 +364,10 @@
             .footer-bar{bottom:calc(10px + var(--safe-bottom));padding:5px 12px;font-size:.64rem;gap:10px;left:calc(50%);right:auto;max-width:calc(100% - 16px)}
             .facility-info{padding:18px;padding-top:14px;padding-left:max(16px,calc(16px + var(--safe-left)));padding-right:max(16px,calc(16px + var(--safe-right)))}
             .facility-name{font-size:1.05rem}
+            /* MOBILE-CLEAN-1: the sticky .sheet-detail-bar carries Close + Back, so
+               hide the in-content header-actions row entirely on mobile (it was the
+               source of the "can't exit the card" confusion — request #3). */
+            .sheet-detail .detail-header-actions{display:none!important}
             .header-inner{padding:0 12px;padding-left:calc(12px + var(--safe-left));padding-right:calc(12px + var(--safe-right));gap:6px}
             .header-right{gap:6px}
         }
@@ -349,36 +397,42 @@
             .component-bar-fill,.score-circle,.classification-badge,.spec-badge,.enforcement-block{print-color-adjust:exact;-webkit-print-color-adjust:exact}
             .print-methodology-url{display:block!important;margin-top:24px;font-size:.8rem;color:#555}
         }
-        /* ── v5.0 mobile home sheet (control center) ───────────────────── */
-        .sheet-home{display:flex;flex-direction:column;flex:1;min-height:0}
-        .sheet-rail{flex-shrink:0;padding:0 14px 8px;padding-left:max(14px,calc(14px + var(--safe-left)));padding-right:max(14px,calc(14px + var(--safe-right)))}
+        /* ── MOBILE-CLEAN-1 (v5.6): static control bar + list overlay ─────────
+           Replaces the v5.0–v5.5 draggable "home sheet" (peek/half/full) with a
+           clean, non-draggable two-state surface. The bottom-sheet height is driven
+           entirely by [data-view] on #detail-sheet (set in JS), with CSS doing the
+           layout/animation — no JS-measured drag heights, no touch-drag handle. */
+        .sheet-home{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+        /* The static bar: List/Map toggle + facility-type chips. Never moves, never
+           obscures the map in MAP view. This is the ONLY persistent mobile chrome. */
+        .sheet-bar{flex-shrink:0;padding:10px 14px 10px;padding-left:max(14px,calc(14px + var(--safe-left)));padding-right:max(14px,calc(14px + var(--safe-right)));border-bottom:1px solid transparent;background:var(--card-bg)}
         .view-toggle{display:flex;background:var(--border);border-radius:10px;padding:3px;gap:3px;margin-bottom:9px}
-        .view-toggle button{flex:1;border:none;background:none;font-family:inherit;font-size:.82rem;font-weight:700;color:var(--text-secondary);padding:8px 0;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;min-height:38px;transition:color .15s,background .15s}
+        .view-toggle button{flex:1;border:none;background:none;font-family:inherit;font-size:.84rem;font-weight:700;color:var(--text-secondary);padding:9px 0;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;min-height:42px;transition:color .15s,background .15s}
         .view-toggle button.on{background:var(--card-bg);color:var(--text-primary);box-shadow:0 1px 4px rgba(0,0,0,.12)}
-        .view-toggle button i{font-size:.78rem}
-        .sheet-find-label{font-size:.66rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
-        .sheet-search-row{display:flex;gap:8px;align-items:stretch}
-        .sheet-search{position:relative;flex:1;min-width:0}
-        .sheet-search .s-ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:.8rem;color:var(--text-secondary);pointer-events:none}
-        .sheet-search input{width:100%;padding:11px 12px 11px 34px;border:1px solid var(--border);border-radius:9px;font-size:16px;background:var(--bg);color:var(--text-primary);font-family:inherit;min-height:44px}
-        .sheet-search input:focus{border-color:var(--accent);background:var(--card-bg);outline:none}
-        .sheet-nearme{display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border:none;border-radius:9px;padding:0 14px;font-size:.82rem;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;min-height:44px;flex-shrink:0;transition:opacity .15s}
-        .sheet-nearme:hover{opacity:.92}
-        .sheet-nearme i{font-size:.85rem}
-        .sheet-scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:6px 14px calc(18px + var(--safe-bottom));padding-left:max(14px,calc(14px + var(--safe-left)));padding-right:max(14px,calc(14px + var(--safe-right)))}
-        .sheet-search-results{display:none;position:relative;z-index:5;margin-bottom:8px;border:1px solid var(--border);border-radius:9px;overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:min(46vh,300px);background:var(--card-bg);box-shadow:0 6px 20px rgba(0,0,0,.12)}
-        .sheet-search-results.active{display:block}
-        .sheet-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
-        .sheet-chip{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border:1px solid var(--border);border-radius:16px;font-size:.78rem;font-weight:600;background:var(--card-bg);color:var(--text-secondary);cursor:pointer;font-family:inherit;min-height:36px;transition:all .15s}
+        .view-toggle button i{font-size:.8rem}
+        /* Chips: a single horizontally-scrollable row (no wrap) so the bar height is
+           fixed and predictable in MAP view. */
+        .sheet-chips{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;padding-bottom:1px}
+        .sheet-chips::-webkit-scrollbar{display:none}
+        .sheet-chip{display:inline-flex;align-items:center;gap:5px;padding:8px 13px;border:1px solid var(--border);border-radius:16px;font-size:.78rem;font-weight:600;background:var(--card-bg);color:var(--text-secondary);cursor:pointer;font-family:inherit;min-height:38px;white-space:nowrap;flex-shrink:0;transition:all .15s}
         .sheet-chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
         .sheet-chip i{font-size:.72rem}
-        .sheet-statsrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;flex-wrap:wrap}
+        /* The scroll region (list) is collapsed to zero in MAP view and expands to
+           fill the sheet in LIST view. */
+        .sheet-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:8px 14px calc(18px + var(--safe-bottom));padding-left:max(14px,calc(14px + var(--safe-left)));padding-right:max(14px,calc(14px + var(--safe-right)))}
+        .sheet-statsrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;flex-wrap:wrap}
         .sheet-stats{font-size:.8rem;color:var(--text-secondary)}
         .sheet-stats strong{color:var(--text-primary);font-weight:700;font-variant-numeric:tabular-nums}
         .sheet-state-pill{display:none;align-items:center;gap:6px;padding:5px 8px 5px 11px;background:var(--accent);color:#fff;border:none;border-radius:14px;font-size:.74rem;font-weight:600;cursor:pointer;font-family:inherit;min-height:30px}
         .sheet-state-pill.active{display:inline-flex}
         .sheet-state-pill .x{font-size:.68rem;width:15px;height:15px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,255,255,.2)}
         .sheet-list{display:flex;flex-direction:column}
+        /* DETAIL overlay header: an always-present, prominent Close (and Back) so a
+           patient can NEVER get stuck on a facility card (request #3). */
+        .sheet-detail-bar{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;padding-left:max(12px,calc(12px + var(--safe-left)));padding-right:max(12px,calc(12px + var(--safe-right)));border-bottom:1px solid var(--border);background:var(--card-bg)}
+        .sheet-back-btn{display:inline-flex;align-items:center;gap:7px;background:none;border:none;color:var(--text-secondary);font-family:inherit;font-size:.86rem;font-weight:600;cursor:pointer;padding:8px 10px 8px 6px;border-radius:9px;min-height:42px}
+        .sheet-back-btn:hover,.sheet-back-btn:focus-visible{background:var(--hover-bg);color:var(--text-primary)}
+        .sheet-back-btn i{font-size:.85rem}
         .sheet-frow{display:flex;align-items:center;gap:9px;padding:11px 2px;border-bottom:1px solid var(--border);cursor:pointer;text-align:left;width:100%;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
         .sheet-frow:last-of-type{border-bottom:none}
         .sheet-frow:active{background:var(--hover-bg)}
@@ -398,7 +452,22 @@
         .sheet-links{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
         .sheet-links a{font-size:.74rem;color:var(--text-secondary);text-decoration:none}
         .sheet-links a:hover{color:var(--accent)}
-        .sheet-detail{display:flex;flex-direction:column;flex:1;min-height:0}
+        .sheet-detail{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+        /* ── MOBILE-CLEAN-1 (v5.6): the three discrete sheet states ────────────
+           Heights are CSS-driven off [data-view] / [data-mode] on #detail-sheet.
+           MAP: the sheet is exactly the static bar (toggle + chips); the scroll
+                region is collapsed so the list can never peek through (request #4).
+           LIST: the sheet covers most of the map; the bar stays pinned, the list
+                 scrolls underneath it.
+           DETAIL: a full overlay with the sticky Close header. */
+        .bottom-sheet[data-mode="home"][data-view="map"]{height:auto}
+        .bottom-sheet[data-mode="home"][data-view="map"] .sheet-scroll{flex:0 0 0;height:0;padding-top:0;padding-bottom:0;overflow:hidden;pointer-events:none}
+        .bottom-sheet[data-mode="home"][data-view="map"] .sheet-bar{border-bottom-color:transparent}
+        .bottom-sheet[data-mode="home"][data-view="list"]{height:calc(100dvh - var(--header-h) - var(--safe-top) - 8px)}
+        .bottom-sheet[data-mode="home"][data-view="list"] .sheet-bar{border-bottom-color:var(--border)}
+        .bottom-sheet[data-mode="detail"]{height:calc(100dvh - var(--safe-top) - 8px)}
+        .bottom-sheet[data-mode="detail"] .sheet-home{display:none}
+        .bottom-sheet[data-mode="home"] .sheet-detail{display:none}
         /* ── ENF-VIZ: enforcement markers + survey history ─────────────────── */
         /* Marker ring: severity styles the RING (is something wrong here),
            the dot fill keeps the score-classification color (the quality score).
@@ -464,16 +533,9 @@
         .enf-filter-chip[aria-pressed="true"]{background:#C0392B;color:#fff;border-color:#C0392B}
         .enf-filter-chip[aria-pressed="true"] i{color:#fff}
         .enf-filter-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-        /* ── ENF-FILTER (mobile): a full-width warning toggle row above the chips ── */
-        .sheet-enf-toggle{display:flex;align-items:center;gap:10px;width:100%;padding:11px 12px;margin-bottom:10px;border:1px solid var(--border);border-radius:10px;background:var(--card-bg);color:var(--text-primary);font-family:inherit;font-size:.84rem;font-weight:600;cursor:pointer;min-height:46px;text-align:left;transition:background .15s,border-color .15s}
-        .sheet-enf-toggle .sx-ic{flex-shrink:0;width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:rgba(232,160,160,.18);color:#C0392B;font-size:.85rem}
-        .sheet-enf-toggle .sx-label{flex:1;min-width:0;line-height:1.2}
-        .sheet-enf-toggle .sx-sub{display:block;font-size:.7rem;font-weight:500;color:var(--text-secondary);margin-top:1px}
-        .sheet-enf-toggle .sx-knob{flex-shrink:0;width:38px;height:22px;border-radius:11px;background:var(--border);position:relative;transition:background .18s}
-        .sheet-enf-toggle .sx-knob::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .18s}
-        .sheet-enf-toggle[aria-pressed="true"]{border-color:#C0392B;background:rgba(232,160,160,.1)}
-        .sheet-enf-toggle[aria-pressed="true"] .sx-knob{background:#C0392B}
-        .sheet-enf-toggle[aria-pressed="true"] .sx-knob::after{transform:translateX(16px)}
+        /* ── ENF-FILTER (mobile): removed in MOBILE-CLEAN-1 (v5.6) — the in-sheet
+           enforcement toggle markup was dropped from the mobile surface. The
+           desktop filter-bar enforcement chip (.enf-filter-chip) is UNCHANGED. ── */
         /* ── STATE DOTS: individual facility dots when a state is drilled into ──
            Larger, brighter, bordered dots replace the color-coded clusters so the
            whole state reads as discrete rated facilities, not pies. */
@@ -556,23 +618,10 @@
         .map-legend .lg-swatch{flex-shrink:0;width:11px;height:11px;border-radius:50%;border:1px solid rgba(0,0,0,.12)}
         .map-legend .lg-enf{display:flex;align-items:flex-start;gap:7px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);line-height:1.35;font-size:.66rem}
         .map-legend .lg-ring{flex-shrink:0;width:11px;height:11px;margin-top:1px;border-radius:50%;background:var(--cls-average);box-shadow:0 0 0 2px #B71C1C}
-        /* ── CAP-VIZ: capabilities panel inside the mobile home sheet ── */
-        .sheet-cap{margin-bottom:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--card-bg)}
-        .sheet-cap-summary{display:flex;align-items:center;gap:10px;padding:11px 12px;cursor:pointer;list-style:none;min-height:46px;font-size:.84rem;font-weight:600;color:var(--text-primary)}
-        .sheet-cap-summary::-webkit-details-marker{display:none}
-        .sheet-cap-summary .scs-ic{flex-shrink:0;width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:var(--hover-bg);color:var(--accent);font-size:.85rem}
-        .sheet-cap-summary .scs-label{flex:1;min-width:0;line-height:1.2}
-        .sheet-cap-summary .scs-sub{display:block;font-size:.7rem;font-weight:500;color:var(--text-secondary);margin-top:1px}
-        .sheet-cap-count{display:none;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--accent);color:#fff;font-size:.68rem;font-weight:700;font-variant-numeric:tabular-nums}
-        .sheet-cap-summary .scs-caret{flex-shrink:0;font-size:.7rem;color:var(--text-secondary);transition:transform .2s}
-        .sheet-cap[open] .scs-caret{transform:rotate(180deg)}
-        .sheet-cap-body{padding:4px 10px 12px;border-top:1px solid var(--border)}
-        .sheet-cap-list{display:flex;flex-direction:column;gap:2px;margin-top:6px}
-        .sheet-cap-list .cap-opt{padding:10px}
-        .sheet-cap-list .cap-opt .cap-ic{width:32px;height:32px}
-        .sheet-cap-clear{width:100%;margin-top:8px;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--card-bg);color:var(--accent);font-family:inherit;font-size:.8rem;font-weight:600;cursor:pointer;min-height:42px}
-        .sheet-cap-clear:active{background:var(--hover-bg)}
-        .sheet-cap-note{font-size:.7rem;color:var(--text-secondary);line-height:1.4;margin-top:8px}
+        /* (MOBILE-CLEAN-1 v5.6: the mobile in-sheet capabilities panel and the
+           in-sheet enforcement toggle were removed from the mobile surface to
+           declutter it; their CSS is dropped here. The desktop filter-bar
+           Capabilities dropdown and enforcement chip are UNCHANGED.) */
         .print-methodology-url{display:none}
     </style>
 </head>
@@ -612,33 +661,26 @@
         <div class="footer-bar" aria-label="Legal"><a href="/about">About</a><a href="/methodology">Methodology</a><a href="/medical-disclaimer">Disclaimer</a><a href="/dispute-process">Dispute</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>
     </main>
 
+    <!--
+      MOBILE-CLEAN-1 (v5.6): the mobile surface is now a STATIC bottom control bar,
+      not a draggable peek/half/full sheet. In MAP view it is a fixed bar (the
+      List/Map toggle + the facility-type chips) and nothing else — no search, no
+      Near-me, no enforcement toggle, no capabilities, no list — leaving the map
+      fully visible and uncluttered. Tapping LIST expands the sheet to cover the
+      map and show the scrollable nearby list under the same static bar. DETAIL is
+      a full overlay with an always-present, prominent Close button.
+    -->
     <div class="bottom-sheet" id="detail-sheet" aria-label="Facilities" role="region" aria-hidden="false">
-        <div class="sheet-handle" id="detail-sheet-handle" aria-hidden="true"></div>
-        <!-- HOME mode: mobile control center -->
+        <!-- HOME mode: static control bar (Map view) / expands to cover map (List view) -->
         <div class="sheet-home" id="sheet-home">
-            <div class="sheet-rail">
+            <div class="sheet-bar" id="sheet-bar">
                 <div class="view-toggle" id="view-toggle" role="group" aria-label="List or map view">
-                    <button type="button" data-view="list" class="on" aria-pressed="true"><i class="fas fa-list-ul" aria-hidden="true"></i> List</button>
-                    <button type="button" data-view="map" aria-pressed="false"><i class="fas fa-map" aria-hidden="true"></i> Map</button>
+                    <button type="button" data-view="map" class="on" aria-pressed="true"><i class="fas fa-map" aria-hidden="true"></i> Map</button>
+                    <button type="button" data-view="list" aria-pressed="false"><i class="fas fa-list-ul" aria-hidden="true"></i> List</button>
                 </div>
-                <div class="sheet-find-label">Find a facility</div>
-                <div class="sheet-search-row">
-                    <div class="sheet-search"><i class="fas fa-search s-ic" aria-hidden="true"></i><input type="text" id="sheet-search" placeholder="Search by hospital or facility name" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="sheet-search-results" aria-autocomplete="list" aria-label="Search facility by name"></div>
-                    <button class="sheet-nearme" id="sheet-nearme" type="button" aria-label="Find facilities near me"><i class="fas fa-location-crosshairs" aria-hidden="true"></i> Near me</button>
-                </div>
+                <div class="sheet-chips" id="sheet-chips" role="group" aria-label="Facility types"></div>
             </div>
             <div class="sheet-scroll" id="sheet-scroll">
-                <div class="sheet-search-results" id="sheet-search-results" role="listbox"></div>
-                <button class="sheet-enf-toggle" id="sheet-enf-toggle" type="button" aria-pressed="false" aria-label="Show only facilities under recent CMS enforcement"><span class="sx-ic" aria-hidden="true"><i class="fas fa-gavel"></i></span><span class="sx-label">Recent CMS enforcement<span class="sx-sub">Show only flagged facilities</span></span><span class="sx-knob" aria-hidden="true"></span></button>
-                <div class="sheet-chips" id="sheet-chips" role="group" aria-label="Facility types"></div>
-                <details class="sheet-cap" id="sheet-cap">
-                    <summary class="sheet-cap-summary"><span class="scs-ic" aria-hidden="true"><i class="fas fa-list-check"></i></span><span class="scs-label">Capabilities<span class="scs-sub">NICU, ER, cardiac cath, MRI, and more</span></span><span class="sheet-cap-count" id="sheet-cap-count" aria-hidden="true"></span><i class="fas fa-chevron-down scs-caret" aria-hidden="true"></i></summary>
-                    <div class="sheet-cap-body">
-                        <div class="sheet-cap-list" id="sheet-cap-list" role="group" aria-label="Required capabilities"></div>
-                        <button class="sheet-cap-clear" id="sheet-cap-clear" type="button">Clear capabilities</button>
-                        <p class="sheet-cap-note">Shows facilities that have <strong>all</strong> selected capabilities. Some apply to hospitals only.</p>
-                    </div>
-                </details>
                 <div class="sheet-statsrow">
                     <span class="sheet-stats" id="sheet-stats" aria-live="polite"></span>
                     <button class="sheet-state-pill" id="sheet-state-pill" type="button" aria-label="Clear state filter"><span id="sheet-state-name"></span><i class="fas fa-times x" aria-hidden="true"></i></button>
@@ -646,8 +688,12 @@
                 <div class="sheet-list" id="sheet-list"></div>
             </div>
         </div>
-        <!-- DETAIL mode: facility detail (shared renderer) -->
+        <!-- DETAIL mode: facility detail (shared renderer) with sticky close header -->
         <div class="sheet-detail" id="sheet-detail" hidden>
+            <div class="sheet-detail-bar">
+                <button class="sheet-back-btn" id="sheet-back-btn" type="button" aria-label="Back to results"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back</button>
+                <button class="sheet-close-btn" id="sheet-close-btn" type="button" aria-label="Close facility details"><i class="fas fa-times" aria-hidden="true"></i></button>
+            </div>
             <div class="sheet-body" id="detail-sheet-body"></div>
         </div>
     </div>
