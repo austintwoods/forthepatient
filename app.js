@@ -1,4 +1,36 @@
     /*
+      ForThePatient.org — app.js v1.3 (Session MOBILE-CLEAN-1 — June 2026)
+      Mobile-only redesign of the bottom surface + initial-geolocation zoom fix.
+      Pure frontend; consumes the live B-ENF-FLAG contract read-only — NO new RPC,
+      NO new RPC PARAM, NO schema change. DESKTOP behavior is unchanged (Invariant
+      #29): all changes are inside isMobile-guarded paths or the mobile sheet model.
+      Changelog vs v1.2:
+        MC1-ZOOM: initMap's first-load geolocation now centers on the visitor's
+              METRO area (zoom 11) instead of the old regional zoom 6 that showed
+              several states (request #1). It also sets userLocation so the mobile
+              nearby list is distance-sorted from the very first render, and (on
+              mobile) opens the list so the visitor immediately sees nearby
+              facilities. A denied/failed lookup falls back to the prior behavior.
+        MC1-STATIC: The draggable peek/half/full "home sheet" is replaced by a
+              STATIC two-state model: setSheetView('map'|'list') toggles a
+              data-view/data-mode attribute on #detail-sheet; CSS does the rest.
+              Removed: getSnapHeights/applySheetHeight/setSheetSnap/
+              setupBottomSheetHandle (no more drag), wireSheetSearch/
+              renderSheetSearchResults (mobile search removed), wireNearMe/
+              startNearMe/showNearMePending + the near-me watch machinery (geo is
+              granted up front, so "Near me" is redundant — request #2), and the
+              mobile enforcement-toggle wiring. The desktop name search, the
+              desktop enforcement chip, and the desktop Capabilities dropdown are
+              all untouched.
+        MC1-EXIT: openFacilityDetail/closeFacilityInfo drive the detail overlay via
+              setSheetContent('detail'|'home'); the sticky Back/Close buttons are
+              wired in wireDetailBar(). Closing returns to whichever home view
+              (map|list) was active. A patient can never get stuck on a card
+              (request #3).
+        MC1-LIST: In Map view the list region is collapsed by CSS so it can never
+              peek through (request #4); renderSheetList only paints when the list
+              is actually visible.
+        ── carried from v1.2 (CAP-VIZ) ──
       ForThePatient.org — app.js v1.2 (Session CAP-VIZ — June 2026)
       Capability filter + de-clustered markers + red enforcement-severity gradient
       + component-weight removal + map legend. Pure frontend; consumes the live
@@ -115,7 +147,10 @@
     let enforcementOnly=false;
     let isMobile=false,isOnline=navigator.onLine,isTouching=false,pendingFetch=false,detailPanelPinned=false,inflightController=null;
     let stateSummaryCache=null,currentViewMode='state';
-    let sheetState='closed',sheetSnap='peek',sheetMode='home',userLocation=null;
+    // MOBILE-CLEAN-1 (v5.6): the mobile surface is a STATIC bar with two home
+    // states (map|list) plus a detail overlay — not a draggable peek/half/full
+    // sheet. sheetView holds the current home state; sheetMode is home|detail.
+    let sheetMode='home',sheetView='map',userLocation=null;
     let filteredState=null;
 
     function classColor(c){return CLASS_COLORS[c]||CLASS_COLORS.Unrated}
@@ -165,13 +200,23 @@
         const dv=debounce(()=>{if(isTouching){pendingFetch=true;return}onViewChange();pushUrlState(true)},300);
         map.on('moveend',dv);map.on('zoomend',dv);
         buildFilterChips();wireNameSearch();wireResizeHandle();wireStateFilterBadge();wireEnfFilter();
-        buildSheetChips();wireSheetSearch();wireNearMe();wireViewToggle();
+        buildSheetChips();wireViewToggle();wireDetailBar();
         if(u.types)activeTypes=new Set(u.types.filter(t=>TYPE_LABEL[t]));
         if(u.state&&STATE_BY_ABBR[u.state])filteredState=u.state;
         syncChips();
         updateStateFilterIndicator();
         loadStateSummary().then(()=>{
-            if(!u.lat&&navigator.geolocation){navigator.geolocation.getCurrentPosition(pos=>{map.setView([pos.coords.latitude,pos.coords.longitude],6)},()=>onViewChange(),{timeout:4000})}else{onViewChange()}
+            if(!u.lat&&navigator.geolocation){
+                navigator.geolocation.getCurrentPosition(pos=>{
+                    // MC1-ZOOM (request #1): land on the visitor's METRO area, not a
+                    // multi-state regional view. Set userLocation so the nearby list
+                    // is distance-sorted from the first paint, and (on mobile) open
+                    // the list so they immediately see facilities near them.
+                    userLocation={lat:pos.coords.latitude,lng:pos.coords.longitude};
+                    map.setView([pos.coords.latitude,pos.coords.longitude],11);
+                    if(isMobile)setSheetView('list');
+                },()=>onViewChange(),{timeout:6000,maximumAge:120000});
+            }else{onViewChange()}
         });
         setTimeout(()=>{if(!currentFacilities.length&&!stateSummaryCache)onViewChange()},2000);
         if(u.facilityId)setTimeout(()=>openFacilityDetail(u.facilityId),500);
@@ -216,7 +261,7 @@
             const cfs=Math.max(8,fs-3);
             const icon=L.divIcon({className:'',html:'<div class="state-bubble" style="width:'+size+'px;height:'+size+'px;background:'+bg+'"><span class="st-abbr" style="font-size:'+fs+'px;color:#2C3E50">'+st+'</span><span class="st-count" style="font-size:'+cfs+'px;color:#2C3E50">'+d.count.toLocaleString()+'</span></div>',iconSize:[size,size],iconAnchor:[size/2,size/2]});
             const m=L.marker([si.lat,si.lng],{icon});
-            m.on('click',()=>{filteredState=st;updateStateFilterIndicator();if(isMobile)setSheetSnap('half');map.setView([si.lat,si.lng],STATE_ZOOM)});
+            m.on('click',()=>{filteredState=st;updateStateFilterIndicator();if(isMobile)setSheetView('list');map.setView([si.lat,si.lng],STATE_ZOOM)});
             const scoreStr=avg!=null?avg.toFixed(1):'—';
             m.bindTooltip('<strong>'+si.n+'</strong><br>'+d.count.toLocaleString()+' facilities · avg '+scoreStr,{direction:'top',offset:[0,-size/2-4]});
             stateBubbleLayer.addLayer(m);
@@ -512,7 +557,7 @@
 
     async function openFacilityDetail(fid){
         openFacilityId=fid;pushUrlState(false);document.title='Loading… — ForThePatient';
-        if(isMobile){setSheetContent('detail');document.getElementById('detail-sheet-body').innerHTML=buildSkeletonHtml();setSheetSnap('half')}
+        if(isMobile){setSheetContent('detail');document.getElementById('detail-sheet-body').innerHTML=buildSkeletonHtml();const b=document.getElementById('detail-sheet-body');if(b)b.scrollTop=0}
         else{const p=document.getElementById('info-panel');document.getElementById('facility-info-content').innerHTML=buildSkeletonHtml();p.classList.add('active')}
         const ov=document.getElementById('map-empty-overlay');if(ov)ov.remove();
         try{const{data,error}=await sb.rpc('facility_detail',{p_facility_id:fid});if(error)throw error;if(!data)throw new Error('No data');
@@ -702,7 +747,7 @@
     function closeFacilityInfo(){
         openFacilityId=null;
         document.title='For The Patient — Healthcare Quality Map';
-        if(isMobile){setSheetContent('home');setSheetSnap('half')}
+        if(isMobile){setSheetContent('home');setSheetView(sheetView)}
         else document.getElementById('info-panel').classList.remove('active','pinned');
         pushUrlState(true);
     }
@@ -744,97 +789,37 @@
             el.appendChild(c);
         });
     }
+    // ── MOBILE-CLEAN-1 (v5.6): static two-state surface ─────────────────────
+    // setSheetView toggles the mobile home surface between 'map' (static bar only,
+    // map fully visible) and 'list' (sheet covers the map, scrollable list). CSS
+    // does the height/layout off the [data-view] attribute; we only set state and
+    // (in list view) paint the list.
+    function setSheetView(view){
+        sheetView=(view==='list')?'list':'map';
+        const sheet=document.getElementById('detail-sheet');
+        if(sheet)sheet.setAttribute('data-view',sheetView);
+        updateViewToggle();
+        if(isMobile&&sheetMode==='home'&&sheetView==='list')renderSheetList();
+        haptic(10);
+    }
     function wireViewToggle(){
         const t=document.getElementById('view-toggle');if(!t||t._wired)return;t._wired=true;
         t.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
             if(sheetMode==='detail')closeFacilityInfo();
-            setSheetSnap(b.dataset.view==='map'?'peek':'half');
-            haptic(10);
+            setSheetView(b.dataset.view==='list'?'list':'map');
         }));
     }
     function updateViewToggle(){
         const t=document.getElementById('view-toggle');if(!t)return;
-        const mapOn=(sheetSnap==='peek');
-        t.querySelectorAll('button').forEach(b=>{const on=(b.dataset.view==='map')===mapOn;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on?'true':'false')});
+        const listOn=(sheetView==='list');
+        t.querySelectorAll('button').forEach(b=>{const on=(b.dataset.view==='list')===listOn;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on?'true':'false')});
     }
-    // Near me (mobile). Single in-flight request at a time; spinner set on tap and
-    // restored on EVERY exit path. Within 4s (Invariant #11) a denial shows the
-    // location-off guide. On a 4s TIMEOUT we keep silently watching in the
-    // background (so a slow-but-eventually-granted fix still recenters) AND surface
-    // an explicit "still trying… / retry" affordance (Q-42: explicit-retry).
-    let nearMeBusy=false,nearMeWatchId=null;
-    function setNearMeBusy(b,on){
-        nearMeBusy=on;
-        const i=b.querySelector('i');
-        if(on){if(!b._iconPrev)b._iconPrev=i?i.className:'';if(i)i.className='fas fa-spinner fa-spin';b.disabled=true;b.setAttribute('aria-busy','true');}
-        else{if(i&&b._iconPrev)i.className=b._iconPrev;b._iconPrev='';b.disabled=false;b.removeAttribute('aria-busy');}
-    }
-    function clearNearMeWatch(){if(nearMeWatchId!=null&&navigator.geolocation){try{navigator.geolocation.clearWatch(nearMeWatchId)}catch(e){}}nearMeWatchId=null}
-    function applyNearMeFix(lat,lng){
-        userLocation={lat,lng};
-        if(filteredState){filteredState=null;updateStateFilterIndicator()}
-        if(map)map.setView([lat,lng],11);
-        setSheetSnap('half');
-        if(isMobile)renderSheetList();
-    }
-    function startNearMe(){
-        const b=document.getElementById('sheet-nearme');if(!b)return;
-        if(nearMeBusy)return;                              // in-flight guard: ignore repeat taps
-        haptic(10);
-        if(!navigator.geolocation){showSheetGuide('location-off');setSheetSnap('half');return}
-        clearNearMeWatch();
-        setNearMeBusy(b,true);
-        let settled=false;
-        const done=fn=>{if(settled)return;settled=true;setNearMeBusy(b,false);if(fn)fn()};
-        navigator.geolocation.getCurrentPosition(
-            pos=>{clearNearMeWatch();done(()=>applyNearMeFix(pos.coords.latitude,pos.coords.longitude))},
-            err=>{
-                // code 3 = TIMEOUT: GPS may still resolve. Keep a background watch and
-                // offer an explicit retry, while honoring the silent map fallback.
-                if(err&&err.code===3){
-                    done(()=>{setSheetSnap('half');showNearMePending();
-                        if(navigator.geolocation&&nearMeWatchId==null){
-                            nearMeWatchId=navigator.geolocation.watchPosition(
-                                pos=>{clearNearMeWatch();applyNearMeFix(pos.coords.latitude,pos.coords.longitude)},
-                                ()=>{clearNearMeWatch()},
-                                {enableHighAccuracy:false,maximumAge:60000});
-                        }
-                    });
-                }else{
-                    // denial / position-unavailable: stop, explain, restore.
-                    clearNearMeWatch();done(()=>{showSheetGuide('location-off');setSheetSnap('half')});
-                }
-            },
-            {timeout:4000,maximumAge:60000}
-        );
-    }
-    function wireNearMe(){
-        const b=document.getElementById('sheet-nearme');if(!b||b._wired)return;b._wired=true;
-        b.addEventListener('click',startNearMe);
-    }
-    function wireSheetSearch(){
-        const input=document.getElementById('sheet-search'),results=document.getElementById('sheet-search-results');if(!input||!results)return;
-        const run=debounce(async()=>{
-            const q=input.value.trim();
-            if(q.length<2){results.classList.remove('active');results.innerHTML='';input.setAttribute('aria-expanded','false');return}
-            if(!isOnline)return;
-            try{const{data,error}=await sb.rpc('search_facilities_by_name',{p_query:q,p_limit:12});if(error)throw error;renderSheetSearchResults(data||[]);input.setAttribute('aria-expanded','true')}catch(e){derr('sheet search failed',e)}
-        },250);
-        input.addEventListener('input',()=>{if(isMobile&&sheetSnap==='peek')setSheetSnap('half');run()});
-        input.addEventListener('focus',()=>{if(isMobile&&sheetSnap==='peek')setSheetSnap('half')});
-    }
-    function renderSheetSearchResults(rows){
-        const el=document.getElementById('sheet-search-results');if(!el)return;
-        if(!rows.length){el.innerHTML='<div class="name-result-item"><div class="name-result-meta">No facilities match that name. Check the spelling, or try fewer words.</div></div>';el.classList.add('active');return}
-        el.innerHTML=rows.map(r=>{const sc=classColor(r.score_classification),st=r.final_score!=null?r.final_score.toFixed(1):'—';return'<div class="name-result-item" data-id="'+escapeHtml(r.facility_id)+'" data-lat="'+r.latitude+'" data-lng="'+r.longitude+'" role="option"><div class="name-result-name">'+escapeHtml(r.facility_name||'')+'</div><div class="name-result-meta">'+escapeHtml(TYPE_LABEL[r.facility_type]||'')+' · '+escapeHtml(r.city||'')+', '+escapeHtml(r.state||'')+' · <span class="name-result-score" style="background:'+sc+'">'+st+'</span></div></div>'}).join('');
-        el.classList.add('active');
-        el.querySelectorAll('.name-result-item[data-id]').forEach(it=>it.addEventListener('click',()=>{
-            const lat=parseFloat(it.dataset.lat),lng=parseFloat(it.dataset.lng);
-            if(!isNaN(lat)&&!isNaN(lng))map.setView([lat,lng],14);
-            const inp=document.getElementById('sheet-search');if(inp)inp.value='';
-            el.classList.remove('active');el.innerHTML='';
-            openFacilityDetail(it.dataset.id);
-        }));
+    // Wire the sticky detail-overlay Back (→ list) and Close (→ home) buttons.
+    function wireDetailBar(){
+        const back=document.getElementById('sheet-back-btn');
+        if(back&&!back._wired){back._wired=true;back.addEventListener('click',()=>{sheetView='list';closeFacilityInfo()})}
+        const close=document.getElementById('sheet-close-btn');
+        if(close&&!close._wired){close._wired=true;close.addEventListener('click',()=>closeFacilityInfo())}
     }
     function setStats(count,avg,label){
         const tc=document.getElementById('total-count'),as=document.getElementById('avg-score');
@@ -863,7 +848,7 @@
             const flag=f.has_active_enforcement?'<span class="sheet-flag'+(sev?' sev-'+SEV_WORD[sev]:'')+'" aria-label="Under active enforcement'+(sev?', '+SEV_WORD[sev]:'')+'">FLAGGED</span>':'';
             return'<button class="sheet-frow" type="button" data-id="'+escapeHtml(f.facility_id)+'"><span class="sc '+(cls==='Unrated'?'unrated':'')+'" style="background:'+sc+'">'+st+'</span><span class="fmeta"><span class="fnm">'+escapeHtml(f.facility_name||'')+'</span><span class="fsub">'+escapeHtml(TYPE_LABEL[f.facility_type]||'')+' · '+escapeHtml(cls)+'</span></span>'+flag+dist+'</button>';
         }).join('');
-        if(rows.length>CAP)html+='<div class="sheet-guide" style="padding:14px 10px"><p>Showing the nearest '+CAP+' of '+rows.length.toLocaleString()+'. Zoom in or search to narrow it down.</p></div>';
+        if(rows.length>CAP)html+='<div class="sheet-guide" style="padding:14px 10px"><p>Showing the nearest '+CAP+' of '+rows.length.toLocaleString()+'. Zoom in on the map to narrow it down.</p></div>';
         html+='<div class="sheet-legend">Scores run 1&ndash;10. <span class="lg-dot" style="background:var(--cls-excep)"></span><span class="lg-dot" style="background:var(--cls-average)"></span><span class="lg-dot" style="background:var(--cls-poor)"></span> Green is stronger, red is weaker, gray means not enough public data to rate.</div>';
         html+=sheetLinksHtml();
         wrap.innerHTML=html;
@@ -875,88 +860,51 @@
     }
     function showSheetGuide(kind){
         const wrap=document.getElementById('sheet-list');if(!wrap)return;
-        let icon='fa-magnifying-glass-location',h='Find a facility',p='Search by name above, tap Near me, or tap a state on the map to zoom in.';
-        if(kind==='empty'){icon='fa-map-location-dot';h='No facilities here yet';p='Zoom out, move the map, or search by name.';}
-        else if(kind==='location-off'){icon='fa-location-crosshairs';h='Location is off';p='No problem — search by name above, or pan the map to your area.';}
+        // MOBILE-CLEAN-1: copy no longer references the removed "Near me" button or
+        // the removed mobile search box. Guidance points at the map + the toggle.
+        let icon='fa-magnifying-glass-location',h='Find a facility',p='Pan or zoom the map to your area, or tap a state to zoom in. Tap a point to see its quality details.';
+        if(kind==='empty'){icon='fa-map-location-dot';h='No facilities here yet';p='Zoom out or move the map to find facilities nearby.';}
+        else if(kind==='location-off'){icon='fa-location-crosshairs';h='Location is off';p='No problem — pan the map to your area, or tap a state to zoom in.';}
         else if(kind==='state-loading'){icon='fa-spinner fa-spin';h='Loading facilities…';p='One moment.';}
         else if(kind==='no-types'){icon='fa-filter';h='No types selected';p='Pick at least one facility type above to see results.';}
-        else if(kind==='no-enf'){icon='fa-gavel';h='No flagged facilities here';p='None of the facilities in view are under recent CMS enforcement. Turn off the filter to see all of them, or move the map.';}
-        else if(kind==='no-cap'){icon='fa-list-check';h='No facilities match every capability';p='None of the facilities here have all the capabilities you selected. Remove a requirement in Capabilities, or move the map.';}
+        else if(kind==='no-enf'){icon='fa-gavel';h='No flagged facilities here';p='None of the facilities in view are under recent CMS enforcement. Move the map to look elsewhere.';}
+        else if(kind==='no-cap'){icon='fa-list-check';h='No facilities match every capability';p='None of the facilities here have all the required capabilities. Move the map to look elsewhere.';}
         wrap.innerHTML='<div class="sheet-guide"><i class="fas '+icon+'" aria-hidden="true"></i><h4>'+h+'</h4><p>'+p+'</p></div>'+sheetLinksHtml();
     }
-    // Slow-GPS state: the 4s timeout fired but we're still listening in the
-    // background. Show progress + an explicit Retry (Q-42 explicit-retry).
-    function showNearMePending(){
-        const wrap=document.getElementById('sheet-list');if(!wrap)return;
-        wrap.innerHTML='<div class="sheet-guide"><i class="fas fa-location-crosshairs fa-fade" aria-hidden="true"></i><h4>Still finding your location…</h4><p>This can take a moment. We&rsquo;ll center the map automatically once your device responds — or you can search by name above.</p><button class="clear-btn" type="button" id="nearme-retry" style="margin-top:6px">Try again</button></div>'+sheetLinksHtml();
-        const r=document.getElementById('nearme-retry');if(r)r.addEventListener('click',()=>{clearNearMeWatch();startNearMe()});
-    }
     function sheetLinksHtml(){return'<div class="sheet-links"><a href="/about">About</a><a href="/methodology">Methodology</a><a href="/medical-disclaimer">Disclaimer</a><a href="/dispute-process">Dispute</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>'}
+    // MOBILE-CLEAN-1: setSheetContent now drives the CSS state machine via the
+    // data-mode attribute on #detail-sheet. data-view (map|list) is held in JS and
+    // applied by setSheetView. No element-hidden juggling beyond the home/detail
+    // panes, which the CSS also toggles by [data-mode] for belt-and-suspenders.
     function setSheetContent(mode){
-        sheetMode=mode;
+        sheetMode=(mode==='detail')?'detail':'home';
+        const sheet=document.getElementById('detail-sheet');
         const home=document.getElementById('sheet-home'),detail=document.getElementById('sheet-detail');
-        if(!home||!detail)return;
-        if(mode==='detail'){home.hidden=true;detail.hidden=false}else{detail.hidden=true;home.hidden=false}
+        if(sheet)sheet.setAttribute('data-mode',sheetMode);
+        if(home)home.hidden=(sheetMode==='detail');
+        if(detail)detail.hidden=(sheetMode!=='detail');
     }
 
     // ─── Bottom sheet (mobile only) ──────────────────────────────────────────
-    function getSnapHeights(){
-        const vh=window.innerHeight;
-        let peek=170;
-        const handle=document.getElementById('detail-sheet-handle'),rail=document.querySelector('.sheet-rail');
-        if(rail){const rh=rail.offsetHeight,hh=handle?handle.offsetHeight:18;if(rh>0)peek=hh+rh+6}
-        const full=Math.round(vh*0.9);
-        peek=Math.min(peek,Math.round(vh*0.45));
-        let half=Math.max(Math.round(vh*0.5),peek+72);half=Math.min(half,full);
-        return{closed:0,peek,half,full};
-    }
-    function applySheetHeight(h,animate){const sheet=document.getElementById('detail-sheet');if(!sheet)return;sheet.style.transition=animate?'height .3s cubic-bezier(.25,.1,.25,1)':'none';sheet.style.height=Math.max(0,h)+'px'}
-    function setSheetSnap(snap,animate){
-        if(!isMobile)return;
-        const sheet=document.getElementById('detail-sheet');if(!sheet)return;
-        let key=snap;
-        if(sheetMode==='detail'&&key==='peek')key='half';   // detail never rests at peek
-        const heights=getSnapHeights();
-        const h=heights[key]!=null?heights[key]:heights.half;
-        sheetSnap=key;
-        sheet.setAttribute('aria-hidden','false');
-        applySheetHeight(h,animate!==false);
-        updateViewToggle();
-    }
-    // Back-compat shims for older call sites.
-    function openBottomSheet(snap){setSheetSnap(snap==='full'?'full':'half')}
-    function closeBottomSheet(){setSheetContent('home');setSheetSnap('peek')}
-    function setupBottomSheetHandle(){
-        const sheet=document.getElementById('detail-sheet');
-        const oldHandle=document.getElementById('detail-sheet-handle');
-        if(!sheet||!oldHandle)return;
-        const handle=oldHandle.cloneNode(false);              // drop stale listeners
-        oldHandle.parentNode.replaceChild(handle,oldHandle);
-        let sY,sH,drag=false;
-        handle.addEventListener('touchstart',e=>{drag=true;sY=e.touches[0].clientY;sH=sheet.offsetHeight;sheet.style.transition='none'},{passive:true});
-        handle.addEventListener('touchmove',e=>{if(!drag)return;const heights=getSnapHeights();const newH=Math.min(heights.full,Math.max(0,sH+(sY-e.touches[0].clientY)));applySheetHeight(newH,false)},{passive:true});
-        handle.addEventListener('touchend',()=>{
-            if(!drag)return;drag=false;
-            const heights=getSnapHeights(),h=sheet.offsetHeight;
-            const cands=sheetMode==='detail'
-                ?[['back',heights.peek],['half',heights.half],['full',heights.full]]
-                :[['peek',heights.peek],['half',heights.half],['full',heights.full]];
-            cands.sort((a,b)=>Math.abs(h-a[1])-Math.abs(h-b[1]));
-            const best=cands[0][0];
-            if(sheetMode==='detail'&&best==='back')closeFacilityInfo();   // drag down in detail = back to list
-            else setSheetSnap(best);
-            haptic(10);
-        },{passive:true});
-    }
+    // MOBILE-CLEAN-1: the draggable peek/half/full machinery (getSnapHeights /
+    // applySheetHeight / setSheetSnap / the touch-drag handle) is GONE. Heights are
+    // CSS-driven off the data-view/data-mode attributes. These thin shims remain
+    // only so any stray legacy call site stays safe.
+    function setSheetSnap(){/* no-op: heights are CSS-driven now */}
+    function openBottomSheet(){setSheetView('list')}
+    function closeBottomSheet(){setSheetContent('home');setSheetView('map')}
+    function setupBottomSheetHandle(){/* no-op: no drag handle in v5.6 */}
 
     function handleViewportResize(){
         checkMobile();
         if(isMobile){
-            setupBottomSheetHandle();
-            setSheetContent(sheetMode);
-            setSheetSnap(sheetSnap==='closed'?'peek':sheetSnap,false);
-        }else{
+            // Re-assert the CSS state attributes; heights are CSS-driven so nothing
+            // needs measuring. Clear any stray inline height left by an older build.
             const sheet=document.getElementById('detail-sheet');if(sheet)sheet.style.height='';
+            setSheetContent(sheetMode);
+            setSheetView(sheetView);
+        }else{
+            const sheet=document.getElementById('detail-sheet');if(sheet){sheet.style.height='';sheet.removeAttribute('data-view');sheet.removeAttribute('data-mode')}
         }
         if(map)map.invalidateSize();
     }
@@ -982,5 +930,5 @@
         initMap();
         setupOfflineDetection();
         setupKeyboardShortcuts();
-        if(isMobile){setupBottomSheetHandle();setSheetContent('home');renderSheetList();requestAnimationFrame(()=>setSheetSnap('peek',false))}
+        if(isMobile){setSheetContent('home');setSheetView('map');renderSheetList()}
     });
