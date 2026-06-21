@@ -1,4 +1,22 @@
 <!--
+  ForThePatient.org v5.7 (Session MOBILE-CLOSE-FIX — June 2026)
+  MOBILE-ONLY one-line hotfix. Pure CSS; no JS, markup, backend, RPC, schema,
+  or scoring change. DESKTOP (>768px) byte-for-byte unchanged (Invariant #29).
+  Changelog vs v5.6:
+    MCF-1: The mobile facility-detail overlay height was
+          calc(100dvh - var(--safe-top) - 8px), i.e. it did NOT subtract the
+          fixed header's height the way the LIST view already does. Because the
+          sheet is position:fixed;bottom:0, that extra header's-worth of height
+          pushed the overlay's TOP edge (and the sticky .sheet-detail-bar that
+          carries Back + Close) up UNDER the fixed header (z-index 1000 vs the
+          sheet's 800), so the Close button was obscured and untappable — users
+          got stuck on a card and had to reload (founder report). Fix: subtract
+          var(--header-h) too, matching the list-view rule, so the overlay's top
+          (and the Close button) sits flush BELOW the header and stays reachable
+          in portrait and landscape. Reinforces Invariant #34 (the detail card
+          must always be exitable). One selector changed; nothing else touched.
+-->
+<!--
   ForThePatient.org v5.6 (Session MOBILE-CLEAN-1 — June 2026)
   Mobile-only redesign of the bottom surface + initial-geolocation zoom fix.
   Pure frontend; consumes the live B-ENF-FLAG contract read-only — NO backend/
@@ -465,7 +483,7 @@
         .bottom-sheet[data-mode="home"][data-view="map"] .sheet-bar{border-bottom-color:transparent}
         .bottom-sheet[data-mode="home"][data-view="list"]{height:calc(100dvh - var(--header-h) - var(--safe-top) - 8px)}
         .bottom-sheet[data-mode="home"][data-view="list"] .sheet-bar{border-bottom-color:var(--border)}
-        .bottom-sheet[data-mode="detail"]{height:calc(100dvh - var(--safe-top) - 8px)}
+        .bottom-sheet[data-mode="detail"]{height:calc(100dvh - var(--header-h) - var(--safe-top) - 8px)}
         .bottom-sheet[data-mode="detail"] .sheet-home{display:none}
         .bottom-sheet[data-mode="home"] .sheet-detail{display:none}
         /* ── ENF-VIZ: enforcement markers + survey history ─────────────────── */
