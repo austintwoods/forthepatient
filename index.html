@@ -1,4 +1,24 @@
 <!--
+  ForThePatient.org v5.9 (Session B-FLAG-SCOPE — June 21 2026)
+  Minimal DETAIL-CARD-ONLY frontend change for the demoted payment-penalty
+  signal (S-20 / Q-58 / Decision 148). Pairs with app.js v1.5. No backend RPC
+  signature change (the new facilities columns ride into facility_detail via the
+  existing to_jsonb(f.*)); NO map/marker change; DESKTOP (>768px) layout
+  byte-for-byte unchanged (Invariant #29); NO new colors (Invariant #18).
+  Changelog vs v5.8:
+    B-FLAG-SCOPE (CSS here; logic in app.js v1.5): the enforcement flag (the red
+          FLAGGED marker + severity ring + "Under active enforcement" banner) now
+          reflects active SURVEY enforcement ONLY. Routine Medicare payment
+          penalties (HRRP readmissions / HAC) — which hit ~75-80% of hospitals a
+          year and were firing the red flag on 45.5% of all hospitals — are
+          DEMOTED to a separate, NEUTRAL "Medicare payment penalties" line on the
+          detail card (new .payment-penalty-block, built from neutral tokens
+          only). The map marker path is untouched: a payment-only hospital simply
+          no longer renders a red ring (it isn't has_active_enforcement). The new
+          facility fields has_payment_penalty + payment_penalty_detail arrive on
+          the 'facility' object with no RPC change. This is what makes the flag
+          mean something serious again (the S-20 dilution fix).
+  ----------------------------------------------------------------------------
   ForThePatient.org v5.8 (Session GEO-DOT — June 2026)
   MOBILE-FORWARD frontend change (the geo dot also helps desktop, but the intent
   is the mobile first-open experience). Pairs with app.js v1.4. No backend, RPC,
@@ -561,6 +581,14 @@
         .enf-banner.sev-minor i{color:#C62828}
         .enf-banner.expired{background:var(--hover-bg);border-color:var(--border)}
         .enf-banner.expired i{color:var(--text-secondary)}
+        /* B-FLAG-SCOPE: the DEMOTED payment-penalty signal. Deliberately NEUTRAL
+           (no enforcement red, no new colors — Invariant #18): it must read as
+           "informational", clearly distinct from the red active-enforcement
+           banner above it. Uses only the existing neutral tokens. */
+        .payment-penalty-block{margin-top:14px;padding:11px 14px;border-radius:8px;border:1px solid var(--border);background:var(--hover-bg);font-size:.82rem}
+        .payment-penalty-head{font-weight:700;color:var(--text-primary);margin-bottom:3px;display:flex;align-items:center;gap:8px}
+        .payment-penalty-head i{color:var(--text-secondary);font-size:.9rem;flex-shrink:0}
+        .payment-penalty-sub{color:var(--text-secondary);font-size:.74rem;line-height:1.45}
         .enf-history{margin-top:6px}
         .enf-row{padding:9px 0;border-bottom:1px solid var(--border);font-size:.78rem}
         .enf-row:last-child{border-bottom:none}
