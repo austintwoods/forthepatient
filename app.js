@@ -1,4 +1,22 @@
     /*
+      ForThePatient.org — app.js v1.5 (Session B-FLAG-SCOPE — June 21 2026)
+      Detail-card-only surfacing of the demoted payment-penalty signal (S-20 /
+      Q-58 / Decision 148). Pairs with index.html v5.9. Pure frontend; consumes
+      the live contract read-only — NO new RPC, NO new RPC PARAM, NO schema change
+      (has_payment_penalty + payment_penalty_detail ride into the 'facility'
+      object via facility_detail's existing to_jsonb(f.*)). DESKTOP behavior
+      unchanged (Invariant #29); NO map/marker change; NO new colors (#18).
+      Changelog vs v1.4:
+        B-FLAG-SCOPE: new buildPaymentPenaltyHtml(f) renders a NEUTRAL, clearly
+              labeled "Medicare payment penalties" line on the detail card when
+              f.has_payment_penalty is true, reading f.payment_penalty_detail
+              (with a safe fallback). Wired into buildFacilityDetailHtml AFTER the
+              enforcement viz so the red active-enforcement banner (now SURVEY-only)
+              stays visually dominant and the payment line reads as informational,
+              not as a safety flag. All strings pass through escapeHtml (#15). The
+              marker/ring path is untouched: a payment-only hospital is simply not
+              has_active_enforcement, so it renders no red ring.
+      ----------------------------------------------------------------------------
       ForThePatient.org — app.js v1.4 (Session GEO-DOT — June 2026)
       Adds the visitor's "you are here" map marker + makes the MAP the default
       mobile view on first open. Pairs with index.html v5.8. Pure frontend;
@@ -776,6 +794,23 @@
         if(label){const total=(panel.querySelectorAll('.enf-row')||[]).length;const noun=total===1?'survey finding':'survey findings';label.textContent=willOpen?('Hide '+noun):('Show '+total+' '+noun);}
     }
 
+    // B-FLAG-SCOPE (v1.5 / Decision 148): the DEMOTED payment-penalty signal.
+    // Routine Medicare payment penalties (HRRP readmissions / HAC) no longer
+    // trip the red enforcement flag — they are surfaced here as a separate,
+    // neutral, clearly-labeled line so they inform without reading as a safety
+    // problem. Detail-card only (no map/marker change). Uses the existing
+    // neutral text tokens (no new colors, Invariant #18) and escapeHtml (#15).
+    // payment_penalty_detail rides into f via facility_detail's to_jsonb(f.*).
+    function buildPaymentPenaltyHtml(f){
+        if(!f||!truthy(f.has_payment_penalty))return'';
+        const detail=f.payment_penalty_detail?String(f.payment_penalty_detail):
+            'Medicare reduced this hospital\u2019s payments under a readmissions (HRRP) or hospital-acquired-condition (HAC) program. These are routine Medicare payment adjustments and do not, on their own, indicate an immediate safety problem.';
+        return'<div class="payment-penalty-block">'+
+            '<div class="payment-penalty-head"><i class="fas fa-file-invoice-dollar" aria-hidden="true"></i> Medicare payment penalties</div>'+
+            '<div class="payment-penalty-sub">'+escapeHtml(detail)+'</div>'+
+            '</div>';
+    }
+
     function buildFacilityDetailHtml(payload){
         const f=payload.facility||payload,comps=payload.components||[],enf=payload.enforcement||[];
         const hospEnf=payload.hospital_enforcement||[];
@@ -787,7 +822,8 @@
         const cmsLine=stars?'<span class="cms-stars">CMS overall: '+'<i class="fas fa-star star-icon"></i>'.repeat(Math.round(stars))+' '+stars+'/5</span>':'';
         const psHtml=buildPatientSummary(f,hospEnf);
         const enfVizHtml=buildEnforcementHtml(f,hospEnf);
-        return'<div class="facility-info"><div class="detail-header-actions"><button class="detail-action-btn" type="button" onclick="copyFacilityLink(\''+escapeHtml(f.facility_id)+'\')" aria-label="Copy link" title="Copy link"><i class="fas fa-link"></i></button><button class="detail-action-btn" type="button" onclick="shareFacility(\''+escapeHtml(f.facility_id)+'\',\''+escapeHtml(f.facility_name)+'\')" aria-label="Share" title="Share"><i class="fas fa-share-nodes"></i></button><button class="detail-action-btn" type="button" data-pin onclick="togglePinPanel()" aria-label="Pin" title="Pin"><i class="fas fa-thumbtack"></i></button><button class="detail-action-btn" type="button" onclick="closeFacilityInfo()" aria-label="Close" title="Close"><i class="fas fa-times"></i></button></div><div class="facility-header"><h2 class="facility-name">'+escapeHtml(f.facility_name||'')+'</h2><div class="facility-type-line">'+escapeHtml(TYPE_LABEL[f.facility_type]||f.facility_type||'')+'</div><div class="score-block"><div class="score-circle '+(cls==='Unrated'?'unrated':'')+'" style="background:'+classColor(cls)+'">'+score+'</div><div class="score-meta"><span class="classification-badge '+classBadgeClass(cls)+'" style="background:'+classColor(cls)+'">'+escapeHtml(cls)+'</span><span class="score-out-of">FTP score · 1 (weakest) to 10 (strongest)</span>'+cmsLine+'</div></div>'+bHtml+'</div>'+psHtml+'<h3 class="section-header">Component breakdown</h3><p class="section-note">The score combines these measures. Each is shown on the same 1&ndash;10 scale, so you can see where this facility is strong or weak.</p>'+compHtml+eHtml+enfVizHtml+'<div class="addr-block">'+(f.address?'<div><i class="fas fa-map-marker-alt"></i>'+escapeHtml(f.address||'')+'</div>':'')+'<div style="padding-left:20px">'+escapeHtml(f.city||'')+(f.city?', ':'')+escapeHtml(f.state||'')+' '+escapeHtml(f.zip_code||'')+'</div>'+(f.phone?'<div><i class="fas fa-phone"></i>'+escapeHtml(f.phone)+'</div>':'')+'</div><a href="https://maps.google.com/?q='+f.latitude+','+f.longitude+'" target="_blank" rel="noopener noreferrer" class="directions-btn">Get Directions</a><div class="print-methodology-url">Methodology: https://forthepatient.org/methodology</div></div>';
+        const payHtml=buildPaymentPenaltyHtml(f);
+        return'<div class="facility-info"><div class="detail-header-actions"><button class="detail-action-btn" type="button" onclick="copyFacilityLink(\''+escapeHtml(f.facility_id)+'\')" aria-label="Copy link" title="Copy link"><i class="fas fa-link"></i></button><button class="detail-action-btn" type="button" onclick="shareFacility(\''+escapeHtml(f.facility_id)+'\',\''+escapeHtml(f.facility_name)+'\')" aria-label="Share" title="Share"><i class="fas fa-share-nodes"></i></button><button class="detail-action-btn" type="button" data-pin onclick="togglePinPanel()" aria-label="Pin" title="Pin"><i class="fas fa-thumbtack"></i></button><button class="detail-action-btn" type="button" onclick="closeFacilityInfo()" aria-label="Close" title="Close"><i class="fas fa-times"></i></button></div><div class="facility-header"><h2 class="facility-name">'+escapeHtml(f.facility_name||'')+'</h2><div class="facility-type-line">'+escapeHtml(TYPE_LABEL[f.facility_type]||f.facility_type||'')+'</div><div class="score-block"><div class="score-circle '+(cls==='Unrated'?'unrated':'')+'" style="background:'+classColor(cls)+'">'+score+'</div><div class="score-meta"><span class="classification-badge '+classBadgeClass(cls)+'" style="background:'+classColor(cls)+'">'+escapeHtml(cls)+'</span><span class="score-out-of">FTP score · 1 (weakest) to 10 (strongest)</span>'+cmsLine+'</div></div>'+bHtml+'</div>'+psHtml+'<h3 class="section-header">Component breakdown</h3><p class="section-note">The score combines these measures. Each is shown on the same 1&ndash;10 scale, so you can see where this facility is strong or weak.</p>'+compHtml+eHtml+enfVizHtml+payHtml+'<div class="addr-block">'+(f.address?'<div><i class="fas fa-map-marker-alt"></i>'+escapeHtml(f.address||'')+'</div>':'')+'<div style="padding-left:20px">'+escapeHtml(f.city||'')+(f.city?', ':'')+escapeHtml(f.state||'')+' '+escapeHtml(f.zip_code||'')+'</div>'+(f.phone?'<div><i class="fas fa-phone"></i>'+escapeHtml(f.phone)+'</div>':'')+'</div><a href="https://maps.google.com/?q='+f.latitude+','+f.longitude+'" target="_blank" rel="noopener noreferrer" class="directions-btn">Get Directions</a><div class="print-methodology-url">Methodology: https://forthepatient.org/methodology</div></div>';
     }
 
     function closeFacilityInfo(){
