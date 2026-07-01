@@ -1,4 +1,21 @@
     /*
+      ForThePatient.org — app.js v1.6 (Session ATTRIB-FIX — June 2026)
+      Drops the non-required Leaflet "prefix" link from the map attribution
+      control while PRESERVING the required "© CARTO · CMS public data"
+      attribution (Known Issues #24 / Decision 152). Pairs with index.html v5.10.
+      Pure frontend; NO backend/RPC/param/schema change; NO new colors (#18);
+      DESKTOP behavior otherwise unchanged (Invariant #29).
+      Changelog vs v1.5:
+        ATTRIB-FIX: map is now created with attributionControl:false, then an
+              attribution control is re-added with {prefix:false}. This removes
+              only the "Leaflet" prefix link. The CARTO + CMS attribution is
+              carried on the tileLayer attribution string (both the initial layer
+              and the theme-toggle layer) and remains visible — it is contractually
+              required (CARTO basemap terms + the OpenStreetMap data beneath them)
+              and part of FTP's honest-sourcing brand, so it is NOT removed. The
+              CSS repositioning that lifts the control clear of the mobile
+              facility-type selector lives in index.html v5.10.
+      ----------------------------------------------------------------------------
       ForThePatient.org — app.js v1.5 (Session B-FLAG-SCOPE — June 21 2026)
       Detail-card-only surfacing of the demoted payment-penalty signal (S-20 /
       Q-58 / Decision 148). Pairs with index.html v5.9. Pure frontend; consumes
@@ -218,7 +235,13 @@
         const u=getUrlState();
         const center=(u.lat&&u.lng)?[u.lat,u.lng]:[39.5,-98.0];
         const zoom=u.z||4;
-        map=L.map('map',{center,zoom,zoomControl:false,preferCanvas:true});
+        // ATTRIB-FIX (v1.6): disable Leaflet's default attribution control so the
+        // non-required "Leaflet" prefix link is dropped, then re-add an attribution
+        // control WITHOUT the prefix. The CARTO + CMS attribution below is REQUIRED
+        // (CARTO basemap terms + the OSM data beneath them + FTP's honest-sourcing
+        // brand) and is preserved via the tileLayer attribution string.
+        map=L.map('map',{center,zoom,zoomControl:false,attributionControl:false,preferCanvas:true});
+        L.control.attribution({prefix:false}).addTo(map);
         const tileUrl=currentTheme==='dark'?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png':'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
         L.tileLayer(tileUrl,{attribution:'&copy; CARTO &middot; CMS public data',subdomains:'abcd',maxZoom:20}).addTo(map);
         // CAP-VIZ (C3-NOCLUSTER): facilities are NEVER clustered. Every facility is
