@@ -1,4 +1,23 @@
 <!--
+  ForThePatient.org v5.10 (Session ATTRIB-FIX — June 2026)
+  Repositions the Leaflet map attribution so it stops overlapping the mobile
+  facility-type selector, WITHOUT removing the required attribution (Known
+  Issues #24 / Decision 152). Pairs with app.js v1.6. Pure frontend; NO backend
+  change; NO new colors (#18); DESKTOP (>768px) layout byte-for-byte unchanged
+  (Invariant #29 — the change is confined to the app.js map-init and a
+  mobile-only @media(max-width:768px) CSS block).
+  Changelog vs v5.9:
+    ATTRIB-FIX: (1) app.js v1.6 drops only the non-required "Leaflet" prefix
+          link (attributionControl:false + L.control.attribution({prefix:false})).
+          (2) Here, a mobile-only rule lifts the bottom-right Leaflet control
+          above the fixed sheet bar (List/Map toggle + chips) by --sheet-bar-h
+          (112px) + safe-area, and makes .leaflet-control-attribution translucent
+          + pointer-events:none so it never blocks a chip tap. The CARTO + CMS
+          attribution itself is KEPT and visible — it is contractually required
+          (CARTO basemap terms + the OpenStreetMap data beneath them) and part of
+          FTP's honest-sourcing brand. Deleting it to free UI space was explicitly
+          rejected (Decision 152). Desktop bottom-right attribution is unchanged.
+  ----------------------------------------------------------------------------
   ForThePatient.org v5.9 (Session B-FLAG-SCOPE — June 21 2026)
   Minimal DETAIL-CARD-ONLY frontend change for the demoted payment-penalty
   signal (S-20 / Q-58 / Decision 148). Pairs with app.js v1.5. No backend RPC
@@ -412,6 +431,17 @@
             .footer-bar{display:none!important}
             .info-panel{display:none!important}
             .bottom-sheet{display:flex}
+            /* ATTRIB-FIX (v5.10): in MAP view the fixed sheet bar (List/Map toggle
+               + facility-type chips) sits at bottom:0 and was overlapped by the
+               bottom-right Leaflet attribution ("© CARTO · CMS public data" —
+               required, kept). Lift the whole bottom row of Leaflet controls above
+               the bar (bar height ≈ toggle+chips+padding) plus the safe-area inset,
+               and make the attribution translucent + non-blocking so it never eats
+               a chip tap. Applies on mobile only; desktop is unchanged (#29). */
+            :root{--sheet-bar-h:112px}
+            .leaflet-bottom.leaflet-right{bottom:calc(var(--sheet-bar-h) + var(--safe-bottom));right:calc(4px + var(--safe-right))}
+            .leaflet-control-attribution{background:rgba(255,255,255,.7)!important;border-radius:6px;pointer-events:none;opacity:.75}
+            [data-theme="dark"] .leaflet-control-attribution{background:rgba(26,31,54,.7)!important}
             .stats-inline{font-size:.64rem;gap:5px;margin-left:4px}
             .stats-inline .stats-label{display:none}
             .stats-inline .stat-item + .stat-item::before{margin-right:2px}
