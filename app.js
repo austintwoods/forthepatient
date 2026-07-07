@@ -1,4 +1,28 @@
     /*
+      ForThePatient.org — app.js v1.7 (Session ATTRIB-FIX-2 — July 2026)
+      Fixes the #24b on-device attribution regression together with index.html
+      v5.11. Pure frontend; NO backend/RPC/param/schema change; NO new colors
+      (#18); DESKTOP behavior unchanged (Invariant #29 — the new logic is
+      isMobile-guarded and only writes two <body> attributes + one CSS custom
+      property). Decision 152 stands (required attribution kept, never deleted).
+      Changelog vs v1.6:
+        ATTRIB-FIX-2: two small additions, no removals.
+          1. syncSheetBarMetrics(): measures the REAL rendered .sheet-bar height
+             (mobile only) and writes it to --sheet-bar-h, so the map attribution
+             clears the bar exactly in MAP view instead of relying on the v5.10
+             guessed 112px constant (which was smaller than the real bar and
+             clipped the tag). Called on load, on resize/orientationchange (via
+             the existing handleViewportResize), and after every setSheetView.
+          2. setSheetView / setSheetContent now MIRROR the mobile home view
+             (data-sheet-view = map|list) and content mode (data-sheet-mode =
+             home|detail) onto <body>, so index.html v5.11 can hide the map's
+             Leaflet attribution in CSS when the List/Detail sheet covers the map
+             (the Leaflet control is a sibling of #detail-sheet, so <body> is the
+             only shared ancestor; and Leaflet controls sit at z-index:1000, above
+             the z-800 sheet, so hiding — not z-order — is the correct fix).
+             handleViewportResize clears both <body> attributes on the desktop
+             branch so nothing leaks across the breakpoint.
+      ----------------------------------------------------------------------------
       ForThePatient.org — app.js v1.6 (Session ATTRIB-FIX — June 2026)
       Drops the non-required Leaflet "prefix" link from the map attribution
       control while PRESERVING the required "© CARTO · CMS public data"
@@ -899,12 +923,32 @@
     // map fully visible) and 'list' (sheet covers the map, scrollable list). CSS
     // does the height/layout off the [data-view] attribute; we only set state and
     // (in list view) paint the list.
+    // ATTRIB-FIX-2 (v1.7): measure the REAL rendered mobile sheet-bar height and
+    // expose it as --sheet-bar-h, so the map attribution is lifted exactly clear
+    // of the bar in MAP view (the v5.10 fixed 112px was smaller than the real bar
+    // and clipped the tag under the toggle — #24b). The .sheet-bar height is the
+    // same in map and list view (the scrollable list is a separate sibling), so
+    // this can be read in any state. Mobile only; a no-op on desktop. A small
+    // pad keeps a hair of breathing room above the toggle.
+    function syncSheetBarMetrics(){
+        if(!isMobile)return;
+        const bar=document.getElementById('sheet-bar');
+        if(!bar)return;
+        const h=Math.ceil(bar.getBoundingClientRect().height);
+        if(h>0)document.documentElement.style.setProperty('--sheet-bar-h',(h+6)+'px');
+    }
     function setSheetView(view){
         sheetView=(view==='list')?'list':'map';
         const sheet=document.getElementById('detail-sheet');
         if(sheet)sheet.setAttribute('data-view',sheetView);
+        // ATTRIB-FIX-2: mirror the home view onto <body> so CSS can hide the
+        // map-anchored Leaflet attribution when the List sheet covers the map.
+        document.body.setAttribute('data-sheet-view',sheetView);
         updateViewToggle();
         if(isMobile&&sheetMode==='home'&&sheetView==='list')renderSheetList();
+        // Re-measure after layout settles (chip/toggle height can change with
+        // orientation, dynamic type, or a late webfont).
+        requestAnimationFrame(syncSheetBarMetrics);
         haptic(10);
     }
     function wireViewToggle(){
@@ -986,6 +1030,9 @@
         const sheet=document.getElementById('detail-sheet');
         const home=document.getElementById('sheet-home'),detail=document.getElementById('sheet-detail');
         if(sheet)sheet.setAttribute('data-mode',sheetMode);
+        // ATTRIB-FIX-2: mirror the content mode onto <body> so CSS can hide the
+        // map-anchored Leaflet attribution when a facility DETAIL covers the map.
+        document.body.setAttribute('data-sheet-mode',sheetMode);
         if(home)home.hidden=(sheetMode==='detail');
         if(detail)detail.hidden=(sheetMode!=='detail');
     }
@@ -1003,13 +1050,19 @@
     function handleViewportResize(){
         checkMobile();
         if(isMobile){
-            // Re-assert the CSS state attributes; heights are CSS-driven so nothing
-            // needs measuring. Clear any stray inline height left by an older build.
+            // Re-assert the CSS state attributes; sheet heights are CSS-driven, but
+            // ATTRIB-FIX-2 measures the real bar height for the attribution lift.
+            // Clear any stray inline height left by an older build.
             const sheet=document.getElementById('detail-sheet');if(sheet)sheet.style.height='';
             setSheetContent(sheetMode);
             setSheetView(sheetView);
+            syncSheetBarMetrics();
         }else{
             const sheet=document.getElementById('detail-sheet');if(sheet){sheet.style.height='';sheet.removeAttribute('data-view');sheet.removeAttribute('data-mode')}
+            // ATTRIB-FIX-2: don't let the mobile view/mode signal leak onto the
+            // desktop <body> (the CSS that reads it is mobile-only, but keep it clean).
+            document.body.removeAttribute('data-sheet-view');
+            document.body.removeAttribute('data-sheet-mode');
         }
         if(map)map.invalidateSize();
     }
@@ -1035,5 +1088,5 @@
         initMap();
         setupOfflineDetection();
         setupKeyboardShortcuts();
-        if(isMobile){setSheetContent('home');setSheetView('map');renderSheetList()}
+        if(isMobile){setSheetContent('home');setSheetView('map');renderSheetList();syncSheetBarMetrics()}
     });
