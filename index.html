@@ -1,4 +1,33 @@
 <!--
+  ForThePatient.org v5.11 (Session ATTRIB-FIX-2 — July 2026)
+  Fixes the on-device attribution regression v5.10 shipped to prod (Known Issues
+  #24b). Pairs with app.js v1.7. Pure frontend; NO backend/RPC/schema change; NO
+  new colors (#18); DESKTOP (>768px) layout byte-for-byte unchanged (Invariant
+  #29 — every change is in the top comment, the app.js mobile paths, or the
+  mobile-only @media(max-width:768px) CSS block). Decision 152 STANDS: the
+  required CARTO + CMS attribution is repositioned/hidden, never deleted.
+  Root cause of #24b (confirmed in code):
+    (a) MAP view — the v5.10 lift used a FIXED --sheet-bar-h:112px that is
+        SMALLER than the real sheet bar (toggle ≈57px incl. margin + chips ≈39px
+        + bar padding 20px ≈ 116px), so the tag tucked UNDER the toggle, clipped.
+    (b) LIST view — the map is NOT hidden behind the List sheet, and Leaflet's
+        control layer sits at z-index:1000, ABOVE the z-800 bottom-sheet, so the
+        map-anchored attribution showed THROUGH over the list rows (a z-order
+        problem, not a lift problem — a bigger constant would not fix it).
+  Changelog vs v5.10:
+    ATTRIB-FIX-2 (CSS here; the view/mode signal + bar measurement in app.js v1.7):
+      1. MAP view now clears the bar exactly: --sheet-bar-h is MEASURED from the
+         real .sheet-bar in app.js (the 120px below is only the pre-JS fallback),
+         so it can never clip regardless of chip/toggle height, dynamic type,
+         landscape, or safe-area.
+      2. LIST or DETAIL: the sheet fully covers the map, so the map's Leaflet
+         attribution is HIDDEN (display:none) — CARTO's obligation is satisfied
+         by its visibility in MAP view, exactly when the CARTO tiles are on
+         screen. app.js v1.7 mirrors the home view (data-sheet-view) and content
+         mode (data-sheet-mode) onto <body> so this is keyable in pure CSS
+         (the Leaflet control is a sibling of #detail-sheet, so <body> is the
+         only common ancestor). Desktop attribution is untouched.
+  ----------------------------------------------------------------------------
   ForThePatient.org v5.10 (Session ATTRIB-FIX — June 2026)
   Repositions the Leaflet map attribution so it stops overlapping the mobile
   facility-type selector, WITHOUT removing the required attribution (Known
@@ -431,17 +460,26 @@
             .footer-bar{display:none!important}
             .info-panel{display:none!important}
             .bottom-sheet{display:flex}
-            /* ATTRIB-FIX (v5.10): in MAP view the fixed sheet bar (List/Map toggle
-               + facility-type chips) sits at bottom:0 and was overlapped by the
-               bottom-right Leaflet attribution ("© CARTO · CMS public data" —
-               required, kept). Lift the whole bottom row of Leaflet controls above
-               the bar (bar height ≈ toggle+chips+padding) plus the safe-area inset,
-               and make the attribution translucent + non-blocking so it never eats
-               a chip tap. Applies on mobile only; desktop is unchanged (#29). */
-            :root{--sheet-bar-h:112px}
+            /* ATTRIB-FIX-2 (v5.11): fixes the #24b on-device regression. In MAP
+               view the required "© CARTO · CMS public data" attribution is lifted
+               clear of the fixed sheet bar (List/Map toggle + chips) — but by the
+               REAL bar height, measured into --sheet-bar-h by app.js v1.7 (the
+               120px here is only the pre-JS fallback; v5.10's fixed 112px was too
+               small and clipped the tag under the toggle). It stays translucent +
+               pointer-events:none so it can never eat a chip tap. In LIST or
+               DETAIL the sheet fully covers the map AND Leaflet's control layer
+               (z-index:1000) sits ABOVE the z-800 sheet, so the tag showed THROUGH
+               over the rows — hide it there (app.js mirrors the view/mode onto
+               <body>, the only common ancestor of #map and #detail-sheet). CARTO's
+               obligation is met by its visibility in MAP view, when the tiles are
+               on screen (Decision 152 — repositioned/hidden, never deleted).
+               Mobile only; desktop is unchanged (#29). */
+            :root{--sheet-bar-h:120px}
             .leaflet-bottom.leaflet-right{bottom:calc(var(--sheet-bar-h) + var(--safe-bottom));right:calc(4px + var(--safe-right))}
             .leaflet-control-attribution{background:rgba(255,255,255,.7)!important;border-radius:6px;pointer-events:none;opacity:.75}
             [data-theme="dark"] .leaflet-control-attribution{background:rgba(26,31,54,.7)!important}
+            body[data-sheet-view="list"] .leaflet-control-attribution,
+            body[data-sheet-mode="detail"] .leaflet-control-attribution{display:none!important}
             .stats-inline{font-size:.64rem;gap:5px;margin-left:4px}
             .stats-inline .stats-label{display:none}
             .stats-inline .stat-item + .stat-item::before{margin-right:2px}
