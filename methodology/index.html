@@ -1,5 +1,12 @@
 <!--
-  ForThePatient.org — Scoring Methodology (Session I)
+  ForThePatient.org — Scoring Methodology · CONTENT-FIX-1 (Aug 8, 2026)
+  Interim honesty pass (Q-65 / Known Issue #4 / handoff v9.2). This page still
+  documents engine v1.9 in detail; this session adds the DATED UPDATE NOTICE
+  (per-type labels, survey-only flag, demoted payment signal), inline v2.x
+  pointers on the stale sections, a v2.0-v2.4 change summary in Versioning,
+  corrected validation/count language, and covered-not-scored phrasing. The
+  complete, reproducible v2.4 rewrite is owed to session J-REV (§17.9) and
+  will REPLACE the notice.
   Static content page matching v4.0 design system.
 -->
 <!DOCTYPE html>
@@ -66,6 +73,7 @@
 
         .callout{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:24px;margin:24px 0;box-shadow:0 2px 12px rgba(0,0,0,.04)}
         .callout-info{border-left:4px solid var(--accent)}
+        .callout-warn{border-left:4px solid #E8A0A0}
         .callout-title{font-size:.82rem;font-weight:700;color:var(--text-primary);margin-bottom:8px}
         .callout p{margin-bottom:8px}
         .callout p:last-child{margin-bottom:0}
@@ -84,11 +92,13 @@
             .page-layout{padding:24px 16px 60px;gap:0}
             .page-title{font-size:1.5rem}
             .logo-sub{display:none}
+            .nav-btn{padding:6px 8px}
             .weight-table{font-size:.78rem}
             .weight-table th,.weight-table td{padding:8px}
             .formula-block{font-size:.75rem;padding:14px}
             .page-footer{flex-direction:column;align-items:flex-start}
         }
+        @media(max-width:414px){.nav-btn[href="/methodology"]{display:none}.logo{font-size:1rem}.header-right{gap:6px}}
     </style>
 </head>
 <body>
@@ -98,7 +108,7 @@
             <div class="header-right">
                 <a class="nav-btn" href="/" aria-label="Map">Map</a>
                 <a class="nav-btn" href="/about" aria-label="About">About</a>
-                <a class="nav-btn active" href="/methodology" aria-label="Methodology">Method</a>
+                <a class="nav-btn active" href="/methodology" aria-label="Methodology">Methodology</a>
                 <button class="toggle-switch" id="theme-toggle-btn" onclick="toggleTheme()" role="switch" aria-checked="false" aria-label="Toggle dark mode"><div class="toggle-slider"><i class="fas fa-sun" aria-hidden="true"></i></div></button>
             </div>
         </div>
@@ -129,19 +139,29 @@
 
         <main class="page-body" role="main">
             <h1 class="page-title">Scoring Methodology</h1>
-            <p class="page-subtitle">Version 1.9 &middot; Last updated: April 2026 &middot; Covers all 7 facility types and 48,452 facilities.</p>
+            <p class="page-subtitle">Engine v1.9 documentation (April 2026) &middot; <strong>See the update notice below — the engine now live is v2.4</strong> &middot; 48,000+ Medicare-certified facilities across all 7 facility types.</p>
+
+            <div class="callout callout-warn">
+                <div class="callout-title"><i class="fas fa-triangle-exclamation" aria-hidden="true" style="margin-right:6px;color:#E8A0A0"></i> Documentation update in progress — notice posted August 8, 2026</div>
+                <p>This page documents scoring engine <strong>v1.9</strong> (April 2026) in detail. The engine now live on the map is <strong>v2.4</strong> (June 2026), which changed three things not yet rewritten below:</p>
+                <p><strong>1. Score labels are now per facility type.</strong> Labels (Exceptional through Poor) are assigned using fixed, published thresholds specific to each of the seven facility types. The single global score bands shown under "Score Classification" below <strong>no longer match live labels</strong>.</p>
+                <p><strong>2. The enforcement flag is survey-only and audited.</strong> The active-enforcement warning now fires only on genuine, currently relevant findings from government surveys. Boilerplate citations (26.9% of source rows) are excluded, and severity is derived from active findings only. At the June 2026 run, 7.4% of hospitals carry the flag.</p>
+                <p><strong>3. Payment penalties no longer flag.</strong> Medicare readmission (HRRP) and hospital-acquired-condition (HAC) penalties are shown as a separate payment signal at half weight; they never trigger the warning flag and never cap a score.</p>
+                <p>A complete, reproducible rewrite of this page for v2.4 — including the exact per-type thresholds, the two-tier enforcement schedule, and how the thresholds were calibrated — is in progress. <strong>Where this page and a live facility card disagree, the card reflects v2.4 and is correct.</strong> Facility counts on this page reflect the June 2026 CMS data release. Questions in the meantime: <strong>hello@forthepatient.org</strong>.</p>
+            </div>
 
             <!-- OVERVIEW -->
             <div class="section" id="overview">
                 <h2 class="section-anchor">Overview</h2>
-                <p>ForThePatient.org assigns every Medicare-certified healthcare facility a composite quality score on a <strong>1.0–10.0 scale</strong>. Scores are built from 4–5 weighted components specific to each facility type, derived entirely from government-mandated reporting data published by the Centers for Medicare &amp; Medicaid Services (CMS).</p>
+                <p>ForThePatient.org assigns every Medicare-certified healthcare facility with sufficient data a composite quality score on a <strong>1.0–10.0 scale</strong>. Scores are built from 4–5 weighted components specific to each facility type, derived entirely from government-mandated reporting data published by the Centers for Medicare &amp; Medicaid Services (CMS).</p>
                 <p>Our methodology is designed around three principles: every score must be reproducible from public data, every component weight must be defensible, and every formula must be published. If you can identify a flaw in our methodology, please <a href="/dispute-process">file a dispute</a> — we will investigate within 30 days.</p>
             </div>
 
             <!-- DATA SOURCES -->
             <div class="section" id="data-sources">
                 <h2 class="section-anchor">Data Sources</h2>
-                <p>All scoring data comes from CMS's Provider Data Catalog, which publishes 24 datasets across 7 facility types. These datasets are updated quarterly and are based on government-mandated reporting — facilities cannot choose what to report or how to frame it.</p>
+                <p>All scoring data comes from CMS's Provider Data Catalog, which publishes 24 core datasets across 7 facility types. These datasets are updated quarterly and are based on government-mandated reporting — facilities cannot choose what to report or how to frame it.</p>
+                <p>As of engine v2.x (see the notice above), two additional compulsory sources are inputs: hospital survey-enforcement records (CMS Form 2567 statements of deficiencies, via CMS's QCOR system) and Medicare payment-penalty files (HRRP and HAC program results).</p>
                 <p>We use no self-reported data, no survey responses beyond CMS's own HCAHPS/HHCAHPS surveys (which are government-administered), and no data from industry groups, hospital associations, or commercial rating systems.</p>
                 <p>Additional context data — such as teaching status, ER availability, NICU, trauma center designation, and Case Mix Index — comes from the CMS Provider of Services (POS) file and the IPPS Impact File. These fields provide filtering and context but <strong>do not affect composite quality scores</strong>.</p>
             </div>
@@ -166,6 +186,7 @@ final_score = max(1.0, composite − enforcement_deduction)
                 <p>The specific half-life depends on the measure update frequency. For quarterly measures, the half-life is approximately 6 months. For annual measures, the half-life is approximately 18 months.</p>
 
                 <h3 id="classification">Score Classification</h3>
+                <p><em>Update — engine v2.4 (see the notice at the top of this page): labels are now assigned per facility type from fixed, published thresholds, not from the single global bands below. The bands shown here reflect v1.9 and no longer match live labels; the full per-type threshold table ships with the v2.4 rewrite.</em></p>
                 <p>Composite scores are classified into five quality tiers, plus a sixth classification for facilities lacking sufficient data:</p>
                 <div class="class-legend">
                     <span class="class-chip"><span class="class-dot" style="background:#A0D8A0"></span> Exceptional (8.0–10.0)</span>
@@ -198,6 +219,7 @@ final_score = max(1.0, composite − enforcement_deduction)
                 <p>Where CMS publishes an overall hospital quality star rating (1–5 stars), we incorporate it as a 30% blend with our independently calculated composite. This acknowledges CMS's risk adjustment work while maintaining our independent methodology as the dominant signal. The star rating is converted to our 1.0–10.0 scale: 1 star = 2.0, 5 stars = 10.0.</p>
 
                 <h4>HRRP Enforcement</h4>
+                <p><em>Update — engine v2.3 (see the notice above): HRRP no longer produces an enforcement deduction of the kind described here. It is now part of a separate, half-weight payment signal that never flags or caps a score.</em></p>
                 <p>Hospitals participating in the Hospital Readmissions Reduction Program (HRRP) with an excess readmission ratio greater than 1.0 receive an enforcement deduction proportional to the excess. This captures Medicare payment penalties that the quality components alone may not fully reflect.</p>
             </div>
 
@@ -326,6 +348,7 @@ effective_deduction = raw_deduction × (composite − 1.0) / 9.0
             <!-- ENFORCEMENT -->
             <div class="section" id="enforcement">
                 <h2 class="section-anchor">Enforcement Overlay</h2>
+                <p><em>Update — engine v2.2/v2.3 (see the notice at the top of this page): hospital enforcement is now two-tier. Genuine, active survey findings can flag a facility and cap its score; HRRP/HAC payment penalties are a separate, half-weight payment signal that never flags. Boilerplate citations are excluded, and severity comes from active findings only. The description below reflects v1.9 and remains accurate for nursing homes.</em></p>
                 <p>Enforcement is an independent layer applied <strong>on top of</strong> composite quality scores. Quality data feeds components; enforcement captures regulatory actions. No measure feeds both a component and the enforcement overlay — this prevents double-counting.</p>
                 <p>Enforcement actions currently applied:</p>
                 <ul>
@@ -356,22 +379,26 @@ effective_deduction = raw_deduction × (composite − 1.0) / 9.0
             <div class="section" id="unrated">
                 <h2 class="section-anchor">Unrated Facilities</h2>
                 <p>Facilities with insufficient data for a composite score receive a score of <code>None</code> (not 0.0) and are classified as "Unrated." This prevents false "worst" rankings for facilities that simply lack data.</p>
-                <p>Approximately 4,914 facilities (10% of total) are currently Unrated. They appear on the map as gray markers. See our <a href="/medical-disclaimer">medical disclaimer</a> for more information on what Unrated means for patients.</p>
+                <p>Roughly one in ten facilities is currently Unrated. They appear on the map as gray markers. See our <a href="/medical-disclaimer">medical disclaimer</a> for more information on what Unrated means for patients.</p>
             </div>
 
             <!-- VALIDATION -->
             <div class="section" id="validation">
                 <h2 class="section-anchor">Validation</h2>
-                <p>Our scoring engine is validated against a suite of 126 automated tests across 9 categories: score range validity, component weight verification, distribution analysis, enforcement logic, facility type coverage, geographic distribution, edge cases, data completeness, and cross-type consistency.</p>
-                <p>Current validation status: <strong>123 of 126 tests passing</strong> (98%). The 3 remaining failures are: 4 facilities with duplicate CMS Certification Numbers, IRF standard deviation of 0.97 (below the 1.0 target), and Georgia nursing home standard deviation of 1.49 (localized distribution concern).</p>
-                <p>Validation is run after every scoring engine update and before every database seed. Results are published in the validation report included with each version release.</p>
+                <p>Our scoring engine ships with an automated validation suite (currently validator v2.5) covering score-range validity, component-weight verification, per-type label coverage and distribution guards, enforcement logic, geographic distribution, and edge cases.</p>
+                <p>Two permanent fixture facilities — one confirming case that must carry the enforcement flag, and one counter-example that must never carry it on boilerplate, expired findings, or a routine payment penalty — are re-checked on every enforcement or classification change.</p>
+                <p>Validation runs after every scoring-engine update and before every database seed. Full validation documentation, including current guard results, will ship with the v2.4 rewrite of this page.</p>
             </div>
 
             <!-- VERSIONING -->
             <div class="section" id="versioning">
                 <h2 class="section-anchor">Versioning &amp; Change Log</h2>
-                <p>Our scoring engine is versioned. The current version is <strong>v1.9</strong>. Every change to component weights, scoring formulas, enforcement logic, or data sources increments the version number and is documented here.</p>
+                <p>Our scoring engine is versioned. The engine now in production is <strong>v2.4</strong>. The detailed documentation on this page covers v1.9; the v2.0–v2.4 changes are summarized below and will be fully documented in the forthcoming rewrite (see the notice at the top of this page). Every change to component weights, scoring formulas, enforcement logic, or data sources increments the version number and is documented here.</p>
                 <ul>
+                    <li><strong>v2.4</strong> (June 2026) — Score classification moved to per-type, criterion-referenced thresholds, calibrated once against the June 2026 national distributions and then frozen. Threshold changes relabel only — they never silently re-score.</li>
+                    <li><strong>v2.3</strong> (June 2026) — Two-tier hospital enforcement: the warning flag restricted to active survey enforcement; HRRP/HAC payment penalties demoted to a separately displayed, half-weight payment signal (no flag, no cap). The hospital flag rate fell from 45.5% to 7.4%.</li>
+                    <li><strong>v2.2</strong> (June 2026) — Enforcement accuracy audit: boilerplate deficiency citations (26.9% of source rows) excluded at ingest and at scoring; enforcement severity derived from active findings only; plain-language summaries added for every surfaced finding.</li>
+                    <li><strong>v2.0–v2.1</strong> (May–June 2026) — Hospital survey-enforcement intake (CMS Form 2567 statements of deficiencies via QCOR) with exponential recency decay, per-severity lingering windows, and resolution-date imputation.</li>
                     <li><strong>v1.9</strong> (April 2026) — Added POS file integration for context fields. IPPS Case Mix Index. No scoring formula changes.</li>
                     <li><strong>v1.8</strong> (March 2026) — Fixed nursing home enforcement floor clustering (proportional deduction). Rebuilt all 5 home health components from actual CMS measures.</li>
                     <li><strong>v1.7</strong> (March 2026) — Fixed dialysis score compression. Switched to percentile ranking on actual numeric rates.</li>
