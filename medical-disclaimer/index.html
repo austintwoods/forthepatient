@@ -1,5 +1,9 @@
 <!--
-  ForThePatient.org — Medical Disclaimer (Session I)
+  ForThePatient.org — Medical Disclaimer · CONTENT-FIX-1 (Aug 8, 2026)
+  Entity-claim scan: clean (no entity/funding claims found). Changes: exact
+  Unrated count replaced with "roughly one in ten" (Inv #42 — exact figures
+  live only beside a data-vintage stamp); nav label unified to "Methodology"
+  (hidden <=414px, mirroring index v5.12).
   Static content page matching v4.0 design system.
 -->
 <!DOCTYPE html>
@@ -66,8 +70,10 @@
             .page-layout{padding:24px 16px 60px;gap:0}
             .page-title{font-size:1.5rem}
             .logo-sub{display:none}
+            .nav-btn{padding:6px 8px}
             .page-footer{flex-direction:column;align-items:flex-start}
         }
+        @media(max-width:414px){.nav-btn[href="/methodology"]{display:none}.logo{font-size:1rem}.header-right{gap:6px}}
     </style>
 </head>
 <body>
@@ -77,7 +83,7 @@
             <div class="header-right">
                 <a class="nav-btn" href="/" aria-label="Map">Map</a>
                 <a class="nav-btn" href="/about" aria-label="About">About</a>
-                <a class="nav-btn" href="/methodology" aria-label="Methodology">Method</a>
+                <a class="nav-btn" href="/methodology" aria-label="Methodology">Methodology</a>
                 <button class="toggle-switch" id="theme-toggle-btn" onclick="toggleTheme()" role="switch" aria-checked="false" aria-label="Toggle dark mode"><div class="toggle-slider"><i class="fas fa-sun" aria-hidden="true"></i></div></button>
             </div>
         </div>
@@ -142,7 +148,7 @@
                     <li>The facility type has limited available quality measures in the current CMS data release.</li>
                     <li>Data for the facility was missing or incomplete in the most recent CMS publication.</li>
                 </ul>
-                <p>Unrated facilities still appear on the ForThePatient.org map (shown in gray) so that patients can see they exist and access their address, contact information, and any contextual data that is available. Approximately 4,914 facilities (about 10% of the total) carry the Unrated classification.</p>
+                <p>Unrated facilities still appear on the ForThePatient.org map (shown in gray) so that patients can see they exist and access their address, contact information, and any contextual data that is available. Roughly one in ten covered facilities carries the Unrated classification.</p>
             </div>
 
             <div class="section" id="limitations">
