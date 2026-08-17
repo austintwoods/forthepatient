@@ -1,5 +1,12 @@
 <!--
-  ForThePatient.org — About (Session I)
+  ForThePatient.org — About · CONTENT-FIX-1 (Aug 8, 2026)
+  Truthful-copy rewrite (Known Issue #25 / Decision 156 / Inv #42 / handoff v9.2):
+  entity, funding, and count claims now match reality ("an independent nonprofit
+  initiative; 501(c)(3) formation underway"); "covered" not "scored" for totals;
+  exact counts only beside the June 2026 vintage stamp; progress since June 2026
+  (two-tier enforcement, per-type frozen labels, plain-language findings, the
+  45.5%->7.4% flag self-audit, the Leapfrog ruling) reflected.
+  Nav label unified to "Methodology" (hidden <=414px, mirroring index v5.12).
   Static content page matching v4.0 design system.
 -->
 <!DOCTYPE html>
@@ -8,7 +15,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
     <title>About — For The Patient</title>
-    <meta name="description" content="ForThePatient.org is a 501(c)(3) nonprofit building the most transparent healthcare quality rating system in the United States. Zero industry funding. Compulsory data only.">
+    <meta name="description" content="ForThePatient.org is an independent nonprofit initiative building the most transparent healthcare quality rating system in the United States. Zero industry funding. Compulsory government data only. 501(c)(3) formation underway.">
     <meta name="theme-color" content="#FDF8F0">
     <link rel="canonical" href="https://forthepatient.org/about">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -83,11 +90,13 @@
             .page-layout{padding:24px 16px 60px;gap:0}
             .page-title{font-size:1.5rem}
             .logo-sub{display:none}
+            .nav-btn{padding:6px 8px}
             .stat-row{gap:12px}
             .stat-card{min-width:100px;padding:14px}
             .stat-number{font-size:1.3rem}
             .page-footer{flex-direction:column;align-items:flex-start}
         }
+        @media(max-width:414px){.nav-btn[href="/methodology"]{display:none}.logo{font-size:1rem}.header-right{gap:6px}}
     </style>
 </head>
 <body>
@@ -97,7 +106,7 @@
             <div class="header-right">
                 <a class="nav-btn" href="/" aria-label="Map">Map</a>
                 <a class="nav-btn active" href="/about" aria-label="About">About</a>
-                <a class="nav-btn" href="/methodology" aria-label="Methodology">Method</a>
+                <a class="nav-btn" href="/methodology" aria-label="Methodology">Methodology</a>
                 <button class="toggle-switch" id="theme-toggle-btn" onclick="toggleTheme()" role="switch" aria-checked="false" aria-label="Toggle dark mode"><div class="toggle-slider"><i class="fas fa-sun" aria-hidden="true"></i></div></button>
             </div>
         </div>
@@ -112,13 +121,13 @@
             <a class="toc-link" href="#independence">Zero Industry Funding</a>
             <a class="toc-link" href="#scoring">How Scoring Works</a>
             <a class="toc-link" href="#coverage">Coverage</a>
-            <a class="toc-link" href="#nonprofit">501(c)(3) Status</a>
+            <a class="toc-link" href="#nonprofit">Nonprofit Status</a>
             <a class="toc-link" href="#contact">Contact</a>
         </nav>
 
         <main class="page-body" role="main">
             <h1 class="page-title">About For The Patient</h1>
-            <p class="page-subtitle">The most transparent healthcare quality rating system in the United States.</p>
+            <p class="page-subtitle">An independent nonprofit initiative building the most transparent healthcare quality rating system in the United States.</p>
 
             <div class="section" id="mission-hospital">
                 <h2 class="section-anchor">The Story That Started Everything</h2>
@@ -134,20 +143,21 @@
 
                 <p>ForThePatient.org exists because the Mission Hospital story is not unique. It is the norm. The dominant healthcare rating systems in the United States are structurally incapable of catching quality failures in real time — and some are financially entangled with the very facilities they claim to evaluate.</p>
                 <p>We set out to build something different.</p>
+                <p>The problem is now a matter of public record. In March 2026, a federal court reviewing the Leapfrog Group's hospital grades held that its methodology was <strong>"deceptive and unfair"</strong> — in part because hospitals that declined Leapfrog's voluntary survey were automatically penalized (<em>Palm Beach Health Network v. Leapfrog Group</em>, S.D. Fla., March 2026). Ratings built on voluntary self-reporting and commercial entanglement are not just unhelpful to patients. A federal court has now said so.</p>
             </div>
 
             <div class="section" id="what-we-do">
                 <h2 class="section-anchor">What We Do</h2>
-                <p>ForThePatient.org publishes independent quality scores for every Medicare-certified healthcare facility in the United States. Each facility receives a composite score on a 1.0–10.0 scale, built from weighted components specific to its facility type, and derived entirely from compulsory government-mandated reporting data.</p>
+                <p>ForThePatient.org covers more than 48,000 Medicare-certified healthcare facilities across seven facility types — every facility that participates in Medicare. Each facility with sufficient public data (about nine in ten) receives an independent composite quality score on a 1.0–10.0 scale, built from weighted components specific to its facility type and derived entirely from compulsory, government-mandated reporting. Facilities without enough data appear as <strong>Unrated</strong> — clearly marked, never hidden, and never ranked as "worst" simply for lacking data.</p>
 
                 <div class="stat-row">
-                    <div class="stat-card"><div class="stat-number">48,452</div><div class="stat-label">Facilities scored</div></div>
+                    <div class="stat-card"><div class="stat-number">48,000+</div><div class="stat-label">Facilities covered</div></div>
                     <div class="stat-card"><div class="stat-number">7</div><div class="stat-label">Facility types</div></div>
-                    <div class="stat-card"><div class="stat-number">24</div><div class="stat-label">CMS datasets</div></div>
+                    <div class="stat-card"><div class="stat-number">24</div><div class="stat-label">Core CMS datasets</div></div>
                     <div class="stat-card"><div class="stat-number">$0</div><div class="stat-label">Industry funding</div></div>
                 </div>
 
-                <p>We cover hospitals, nursing homes, dialysis centers, home health agencies, hospices, inpatient rehabilitation facilities (IRFs), and long-term care hospitals (LTCHs). Every facility that participates in Medicare is included. No facility can pay to be featured, removed, or reclassified.</p>
+                <p>On the map, every scored facility carries a color-coded score and a plain-English label. Facilities under active, genuine survey enforcement are visibly flagged, with each finding translated into language a patient can act on. Medicare payment penalties are shown too — clearly, and separately from the warning flag. No facility can pay to be featured, removed, or reclassified, and no facility can pay to make a finding disappear.</p>
             </div>
 
             <div class="section" id="principles">
@@ -156,7 +166,7 @@
                     <div class="principle">
                         <div class="principle-icon"><i class="fas fa-ban" aria-hidden="true"></i></div>
                         <h4>Zero Industry Funding</h4>
-                        <p>No facility revenue. No pharmaceutical donations. No advertising from the healthcare industry. Ever. This is not a policy — it is an organizational constraint baked into our bylaws and articles of incorporation.</p>
+                        <p>No facility revenue. No pharmaceutical money. No advertising from the healthcare industry. Ever. This is a founding constraint, not a marketing policy — and it will be written into our articles of incorporation and bylaws as our 501(c)(3) formation completes.</p>
                     </div>
                     <div class="principle">
                         <div class="principle-icon"><i class="fas fa-file-contract" aria-hidden="true"></i></div>
@@ -166,7 +176,7 @@
                     <div class="principle">
                         <div class="principle-icon"><i class="fas fa-lock-open" aria-hidden="true"></i></div>
                         <h4>Complete Methodological Transparency</h4>
-                        <p>Every formula, every weight, every data transformation is published on our <a href="/methodology">methodology page</a>. If you disagree with a scoring decision, you can see exactly how it was made and <a href="/dispute-process">submit a dispute</a>.</p>
+                        <p>Every weight, formula, and data source is published on our <a href="/methodology">methodology page</a>, and when the engine changes, the documentation follows. If you disagree with a scoring decision, you can see exactly how it was made and <a href="/dispute-process">submit a dispute</a>.</p>
                     </div>
                     <div class="principle">
                         <div class="principle-icon"><i class="fas fa-chart-line" aria-hidden="true"></i></div>
@@ -174,9 +184,14 @@
                         <p>Our scoring model weights recent data exponentially more than older data. A facility that was excellent five years ago but deteriorated last quarter will see its score reflect the decline — not the legacy.</p>
                     </div>
                     <div class="principle">
-                        <div class="principle-icon"><i class="fas fa-gavel" aria-hidden="true"></i></div>
-                        <h4>Independent Enforcement Overlay</h4>
-                        <p>Regulatory actions — fines, payment denials, abuse citations, Special Focus Facility designations — are applied as an independent layer on top of quality scores. Enforcement catches what quality measures alone cannot.</p>
+                        <div class="principle-icon"><i class="fas fa-flag" aria-hidden="true"></i></div>
+                        <h4>A Warning Flag That Means Something</h4>
+                        <p>Our enforcement flag fires only on genuine, active findings from government surveys — never on boilerplate paperwork, expired citations, or routine payment penalties. We audited our own flag and cut its firing rate from 45.5% of hospitals to 7.4%, because a warning that fires half the time warns no one.</p>
+                    </div>
+                    <div class="principle">
+                        <div class="principle-icon"><i class="fas fa-language" aria-hidden="true"></i></div>
+                        <h4>Plain Language</h4>
+                        <p>Every enforcement finding we surface is translated into plain English a patient can understand and act on — what was found, how serious it is, and whether it is still active. No citation codes without explanation.</p>
                     </div>
                 </div>
             </div>
@@ -185,28 +200,29 @@
                 <h2 class="section-anchor">Zero Industry Funding</h2>
                 <p>Most healthcare rating systems in the United States accept money from the facilities they evaluate. Some sell consulting services to help hospitals improve their ratings. Others accept advertising from hospital systems. A few charge facilities for access to their own quality data.</p>
                 <p>These financial relationships create structural conflicts of interest that are impossible to fully mitigate. A rating system that depends on hospital revenue cannot credibly threaten to downgrade those same hospitals.</p>
-                <p>ForThePatient.org accepts <strong>zero revenue from the healthcare industry</strong>. Our funding comes from individual donors, foundations, and grants that share our commitment to independent patient information. This is not a temporary fundraising strategy — it is a permanent organizational principle enforced through our governing documents.</p>
+                <p>ForThePatient.org accepts <strong>zero revenue from the healthcare industry</strong>. To date, the project has been built and funded entirely independently — no industry money of any kind has ever touched it. As our nonprofit formation completes, funding will come from individual donors, foundations, and grants that share our commitment to independent patient information — never from the facilities we rate, their trade associations, or the vendors that sell to them. We are not yet accepting donations; when we are, it will be announced here first.</p>
                 <p>We believe the question "Who pays for this?" is the single most important question you can ask about any quality rating system.</p>
             </div>
 
             <div class="section" id="scoring">
                 <h2 class="section-anchor">How Scoring Works</h2>
-                <p>Each facility receives a composite quality score from 1.0 to 10.0, classified as Exceptional, Above Average, Average, Below Average, or Poor. Facilities with insufficient data for scoring are classified as Unrated and still appear on the map.</p>
+                <p>Each scored facility receives a composite quality score from 1.0 to 10.0, classified as Exceptional, Above Average, Average, Below Average, or Poor. Labels are assigned <strong>per facility type</strong> using fixed, published thresholds — an Above Average nursing home is judged against nursing-home standards, not hospital ones — and those thresholds stay frozen between methodology versions, so a label means the same thing at every data refresh. Facilities with insufficient data are classified as Unrated and still appear on the map.</p>
                 <p>Composite scores are built from 4–5 weighted components tailored to each facility type. Hospital scores, for example, incorporate mortality, safety &amp; infections, readmissions, patient experience, and timely &amp; effective care — each weighted according to its demonstrated impact on patient outcomes.</p>
 
                 <h3>What makes our scoring different</h3>
                 <ul>
                     <li><strong>Percentile ranking against national distributions</strong> — a facility's performance is measured against all facilities of the same type, using per-measure national distributions rather than arbitrary thresholds.</li>
                     <li><strong>Exponential recency decay</strong> — recent data carries exponentially more weight, so scores reflect current quality rather than historical averages.</li>
-                    <li><strong>Enforcement overlay</strong> — regulatory actions like fines, payment denials, and abuse citations are applied independently of the quality components, catching problems that clinical measures alone may miss.</li>
-                    <li><strong>No CMS star blending for most types</strong> — where CMS publishes star ratings, we incorporate them as a minor component (10–30%) rather than deferring to them. For most facility types, our scoring is entirely independent of CMS stars.</li>
+                    <li><strong>Two-tier enforcement</strong> — active, genuine survey findings can flag a facility and cap its score; routine Medicare payment penalties (readmission and hospital-acquired-condition programs) are a separate, clearly labeled signal at half weight — visible, but never the reason a red flag appears.</li>
+                    <li><strong>Frozen, criterion-referenced labels</strong> — score labels come from fixed per-type thresholds, calibrated once against real national distributions and then frozen. Labels are never re-normalized run to run, so a facility's trend over time is real, not a grading-curve artifact.</li>
+                    <li><strong>No CMS star deference</strong> — where CMS publishes star ratings, we incorporate them as a minor component (10–30%) rather than deferring to them. For most facility types, our scoring is entirely independent of CMS stars.</li>
                 </ul>
-                <p>Full details are available on our <a href="/methodology">methodology page</a>, including exact component weights, data transformations, and scoring formulas for all seven facility types.</p>
+                <p>Full details are available on our <a href="/methodology">methodology page</a>, including component weights, data transformations, and scoring formulas for all seven facility types. (Our scoring engine had a major upgrade in June 2026; that page carries a dated notice while its full documentation is rewritten.)</p>
             </div>
 
             <div class="section" id="coverage">
                 <h2 class="section-anchor">Coverage</h2>
-                <p>ForThePatient.org scores every Medicare-certified facility in the United States across seven types:</p>
+                <p>ForThePatient.org covers every Medicare-certified facility in the United States across seven types. Exact counts shift slightly with each quarterly CMS refresh; the figures below reflect the <strong>June 2026</strong> data release:</p>
                 <ul>
                     <li><strong>Hospitals</strong> — 5,421 acute-care and critical-access hospitals</li>
                     <li><strong>Nursing Homes</strong> — 14,713 skilled nursing facilities</li>
@@ -216,21 +232,21 @@
                     <li><strong>Inpatient Rehabilitation Facilities</strong> — 1,221 post-acute rehabilitation centers</li>
                     <li><strong>Long-Term Care Hospitals</strong> — 319 facilities for extended acute care</li>
                 </ul>
-                <p>Data is sourced from CMS's Provider Data Catalog, which publishes 24 datasets updated quarterly. Our scoring engine processes all datasets through a unified pipeline and refreshes scores when CMS publishes new data.</p>
+                <p>Data comes from CMS's Provider Data Catalog — 24 core datasets across the seven facility types, updated quarterly — plus CMS survey-enforcement records and Medicare payment-penalty files. All of it is compulsory, and all of it is public. Our scoring engine processes everything through a unified pipeline and refreshes scores when CMS publishes new data.</p>
             </div>
 
             <div class="section" id="nonprofit">
-                <h2 class="section-anchor">501(c)(3) Status</h2>
-                <p>ForThePatient.org is organized as a 501(c)(3) tax-exempt nonprofit corporation under the laws of the State of Georgia. Our charitable purpose is to empower patients with transparent, data-driven healthcare quality information.</p>
-                <p>As a 501(c)(3), we are prohibited from distributing profits to any private individual. All revenue is reinvested in our mission: expanding data coverage, improving scoring methodologies, and making healthcare quality information freely accessible to every patient in the United States.</p>
-                <p>Our long-term vision includes a complementary 501(c)(4) advocacy organization to advance healthcare quality policy, but the rating system itself will always remain independent, nonpartisan, and free from industry influence.</p>
+                <h2 class="section-anchor">Nonprofit Status</h2>
+                <p>ForThePatient.org is <strong>an independent nonprofit initiative; 501(c)(3) formation is underway</strong>. Until incorporation and IRS recognition are complete, we will not describe ourselves as a 501(c)(3) — this page is updated when a milestone is actually finished, never before. That is the same standard we hold facilities to: claims should match the record.</p>
+                <p>What is already true today: the project takes no industry money, sells nothing to the facilities it rates, and publishes its methodology. What formation adds: a legal entity that holds the project's work, an independent board with zero seats for rated entities, a conflict-of-interest policy that binds the founder personally, and — as we grow — an independent methodology advisory board with real authority over scoring changes.</p>
+                <p>Nonprofit status means no profits are ever distributed to any private individual; all revenue is reinvested in the mission of making healthcare quality information freely accessible to every patient in the United States. Our long-term vision includes a complementary 501(c)(4) advocacy organization to advance healthcare-quality policy, but the rating system itself will always remain independent, nonpartisan, and free from industry influence.</p>
             </div>
 
             <div class="section" id="contact">
                 <h2 class="section-anchor">Contact</h2>
-                <p>ForThePatient.org is based in Atlanta, Georgia.</p>
+                <p>ForThePatient.org is an independent, U.S.-based initiative.</p>
                 <p>For general inquiries, data questions, or partnership discussions, reach us at <strong>hello@forthepatient.org</strong>.</p>
-                <p>To dispute a facility score or report a data error, please use our <a href="/dispute-process">formal dispute process</a> to ensure your request is tracked and resolved within 30 days.</p>
+                <p>To dispute a facility score or report a data error, please use our <a href="/dispute-process">formal dispute process</a> to ensure your request is tracked and answered within 30 days.</p>
                 <p>Media inquiries: <strong>press@forthepatient.org</strong>.</p>
             </div>
         </main>
