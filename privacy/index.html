@@ -1,6 +1,12 @@
 <!--
-  ForThePatient.org — Privacy Policy (Session I)
-  Static content page matching v4.0 design system.
+  ForThePatient.org — Privacy Policy · CONTENT-FIX-1 (Aug 8, 2026)
+  Entity-claim fixes (D156 / #25): "501(c)(3) nonprofit corporation registered
+  in the State of Georgia" -> "an independent nonprofit initiative; 501(c)(3)
+  formation underway" (Q-63); "As a 501(c)(3) nonprofit" reframed as the
+  structural commitment it actually is; Atlanta basing removed from Contact
+  (Q-64: jurisdiction silence until J-ORG). "Last updated" bumped per this
+  policy's own change clause. Nav label unified to "Methodology" (hidden
+  <=414px, mirroring index v5.12). Static content page, v4.0 design system.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -51,6 +57,7 @@
         .section a{color:var(--accent);text-decoration:underline;text-decoration-color:rgba(91,133,199,.3);text-underline-offset:2px;transition:text-decoration-color .2s}
         .section a:hover{text-decoration-color:var(--accent)}
         .section strong{color:var(--text-primary);font-weight:600}
+        .section code{background:var(--hover-bg);padding:2px 6px;border-radius:4px;font-size:.85em;font-family:'SF Mono','Fira Code',monospace}
         .data-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.85rem}
         .data-table th{text-align:left;padding:10px 12px;background:var(--hover-bg);color:var(--text-primary);font-weight:600;border-bottom:2px solid var(--border);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
         .data-table td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text-secondary);vertical-align:top}
@@ -65,10 +72,12 @@
             .page-layout{padding:24px 16px 60px;gap:0}
             .page-title{font-size:1.5rem}
             .logo-sub{display:none}
+            .nav-btn{padding:6px 8px}
             .data-table{font-size:.78rem}
             .data-table th,.data-table td{padding:8px}
             .page-footer{flex-direction:column;align-items:flex-start}
         }
+        @media(max-width:414px){.nav-btn[href="/methodology"]{display:none}.logo{font-size:1rem}.header-right{gap:6px}}
     </style>
 </head>
 <body>
@@ -78,7 +87,7 @@
             <div class="header-right">
                 <a class="nav-btn" href="/" aria-label="Map">Map</a>
                 <a class="nav-btn" href="/about" aria-label="About">About</a>
-                <a class="nav-btn" href="/methodology" aria-label="Methodology">Method</a>
+                <a class="nav-btn" href="/methodology" aria-label="Methodology">Methodology</a>
                 <button class="toggle-switch" id="theme-toggle-btn" onclick="toggleTheme()" role="switch" aria-checked="false" aria-label="Toggle dark mode"><div class="toggle-slider"><i class="fas fa-sun" aria-hidden="true"></i></div></button>
             </div>
         </div>
@@ -104,12 +113,12 @@
 
         <main class="page-body" role="main">
             <h1 class="page-title">Privacy Policy</h1>
-            <p class="page-subtitle">Effective: April 27, 2026 &middot; Last updated: April 27, 2026</p>
+            <p class="page-subtitle">Effective: April 27, 2026 &middot; Last updated: August 8, 2026</p>
 
             <div class="section" id="overview">
                 <h2 class="section-anchor">Overview</h2>
                 <p>ForThePatient.org is committed to protecting your privacy. This policy explains what information we collect, how we use it, and what rights you have. The short version: <strong>we collect almost nothing, we never sell data, and we never set third-party cookies.</strong></p>
-                <p>ForThePatient.org is operated by a 501(c)(3) nonprofit corporation registered in the State of Georgia. Our mission is to provide transparent healthcare quality information, not to collect or monetize user data.</p>
+                <p>ForThePatient.org is operated as an independent nonprofit initiative; formal 501(c)(3) formation is underway. Our mission is to provide transparent healthcare quality information, not to collect or monetize user data.</p>
             </div>
 
             <div class="section" id="collect">
@@ -192,7 +201,7 @@
 
             <div class="section" id="sharing">
                 <h2 class="section-anchor">Data Sharing &amp; Selling</h2>
-                <p><strong>We never sell your data.</strong> This is not a policy choice — it is a structural feature of our organization. As a 501(c)(3) nonprofit with zero industry funding, we have no financial incentive to collect, profile, or monetize user behavior.</p>
+                <p><strong>We never sell your data.</strong> This is not a fine-print carve-out — it is a structural commitment: we run no advertising, accept no money from the healthcare industry, and have no financial incentive to collect, profile, or monetize user behavior.</p>
                 <p>We may disclose information if required to do so by law (such as in response to a valid subpoena or court order), or if we believe in good faith that disclosure is necessary to protect our rights, protect your safety or the safety of others, or investigate fraud.</p>
             </div>
 
@@ -205,7 +214,7 @@
 
             <div class="section" id="gdpr">
                 <h2 class="section-anchor">Your Rights Under GDPR</h2>
-                <p>Although ForThePatient.org is a U.S.-based nonprofit and may not be strictly subject to the General Data Protection Regulation, we voluntarily extend GDPR-equivalent rights to all users regardless of location. If you are in the European Economic Area, you have the right to:</p>
+                <p>Although ForThePatient.org is a U.S.-based initiative and may not be strictly subject to the General Data Protection Regulation, we voluntarily extend GDPR-equivalent rights to all users regardless of location. If you are in the European Economic Area, you have the right to:</p>
                 <ul>
                     <li><strong>Access</strong> — Request a copy of any personal data we hold about you.</li>
                     <li><strong>Rectification</strong> — Request correction of inaccurate personal data.</li>
@@ -248,7 +257,7 @@
             <div class="section" id="contact">
                 <h2 class="section-anchor">Contact</h2>
                 <p>For privacy-related questions or requests:</p>
-                <p>ForThePatient.org<br>Atlanta, Georgia<br><strong>privacy@forthepatient.org</strong></p>
+                <p>ForThePatient.org<br><strong>privacy@forthepatient.org</strong></p>
             </div>
         </main>
     </div>
