@@ -1,6 +1,13 @@
 <!--
-  ForThePatient.org — Dispute Process (Session I)
-  Static content page matching v4.0 design system.
+  ForThePatient.org — Dispute Process · CONTENT-FIX-1 (Aug 8, 2026)
+  Capacity-honesty pass (handoff v9.2): removed the impossible "different team
+  member" appeal claim (solo operation); corrections timing now reflects the
+  real pipeline (display fixes fast, re-scored fixes at next refresh); audit
+  trail framed as a growing commitment that includes self-found corrections;
+  added the public-data-only correction rule (the Leapfrog-trap guardrail).
+  SLA table numbers retained as-is pending founder ratification (Q-75) and the
+  J-LEGAL-SHIELD capacity review. Nav label unified to "Methodology" (hidden
+  <=414px, mirroring index v5.12). Static content page, v4.0 design system.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -82,10 +89,12 @@
             .page-layout{padding:24px 16px 60px;gap:0}
             .page-title{font-size:1.5rem}
             .logo-sub{display:none}
+            .nav-btn{padding:6px 8px}
             .timeline-table{font-size:.78rem}
             .timeline-table th,.timeline-table td{padding:8px}
             .page-footer{flex-direction:column;align-items:flex-start}
         }
+        @media(max-width:414px){.nav-btn[href="/methodology"]{display:none}.logo{font-size:1rem}.header-right{gap:6px}}
     </style>
 </head>
 <body>
@@ -95,7 +104,7 @@
             <div class="header-right">
                 <a class="nav-btn" href="/" aria-label="Map">Map</a>
                 <a class="nav-btn" href="/about" aria-label="About">About</a>
-                <a class="nav-btn" href="/methodology" aria-label="Methodology">Method</a>
+                <a class="nav-btn" href="/methodology" aria-label="Methodology">Methodology</a>
                 <button class="toggle-switch" id="theme-toggle-btn" onclick="toggleTheme()" role="switch" aria-checked="false" aria-label="Toggle dark mode"><div class="toggle-slider"><i class="fas fa-sun" aria-hidden="true"></i></div></button>
             </div>
         </div>
@@ -123,7 +132,7 @@
             <div class="section" id="overview">
                 <h2 class="section-anchor">Overview</h2>
                 <p>Transparency means accountability. Any healthcare facility, patient, family member, researcher, or member of the public can contest any score, data point, or enforcement action published on ForThePatient.org. We commit to investigating every dispute within <strong>30 calendar days</strong> and publishing our resolution.</p>
-                <p>Our dispute process is designed to be accessible, transparent, and fair. Disputes are tracked in a public log so that anyone can see how we respond to challenges and whether patterns of error exist in our data or methodology.</p>
+                <p>Our dispute process is designed to be accessible, transparent, and fair. Every dispute we receive is tracked, and every resolution is published in a public audit log so that anyone can see how we respond to challenges and whether patterns of error exist in our data or methodology. The project is young — the log grows as disputes arrive, and we hold ourselves to logging our own self-found corrections there as well.</p>
             </div>
 
             <div class="section" id="who-can-file">
@@ -154,6 +163,11 @@
 
                 <h3>5. Missing or Outdated Information</h3>
                 <p>A facility that should appear but does not, a recent CMS data update we have not yet incorporated, or contextual information (specialties, services) that is missing or outdated.</p>
+
+                <div class="callout callout-info">
+                    <div class="callout-title">One rule above all: public data only</div>
+                    <p>Corrections are made only against compulsory public data sources. We do not accept facility-supplied performance data as a substitute for CMS data — if the public record is wrong, we will say so and help get it fixed at the source, but we will not swap in numbers a facility provides about itself. Ratings that bend to facility-supplied data are precisely what ForThePatient.org was built to avoid.</p>
+                </div>
             </div>
 
             <div class="section" id="how-to-file">
@@ -260,7 +274,7 @@
                 <h2 class="section-anchor">Possible Outcomes</h2>
 
                 <h3>Correction Applied</h3>
-                <p>If we confirm a data error or scoring mistake, we correct the affected facility's score, update our database, and note the correction in the public audit trail. Corrections are typically applied within 24 hours of resolution.</p>
+                <p>If we confirm a data error or scoring mistake, we correct the affected facility's record, update our database, and note the correction in the public audit trail. Corrections to displayed information are applied promptly — typically within a few days of resolution. Corrections that require re-running our scoring pipeline take effect with the next scoring refresh, and the pending correction is noted in the audit trail in the interim.</p>
 
                 <h3>Methodology Updated</h3>
                 <p>If a methodological challenge reveals a legitimate flaw or improvement opportunity, we may update our scoring methodology. Methodology changes affect all facilities of the relevant type and are documented in a versioned update to our <a href="/methodology">methodology page</a>.</p>
@@ -274,7 +288,7 @@
 
             <div class="section" id="audit-trail">
                 <h2 class="section-anchor">Public Audit Trail</h2>
-                <p>Every dispute and its resolution is recorded in our public audit trail. The audit trail includes:</p>
+                <p>Every dispute and its resolution is recorded in our public audit trail — along with corrections we find ourselves before anyone reports them. The audit trail includes:</p>
                 <ul>
                     <li>Dispute tracking number</li>
                     <li>Date received and date resolved</li>
@@ -291,7 +305,7 @@
 
             <div class="section" id="appeals">
                 <h2 class="section-anchor">Appeals</h2>
-                <p>If you disagree with our resolution, you may file an appeal by replying to your resolution email or sending a new email to <strong>disputes@forthepatient.org</strong> referencing your dispute tracking number. Appeals are reviewed by a different team member than the original investigator.</p>
+                <p>If you disagree with our resolution, you may file an appeal by replying to your resolution email or sending a new email to <strong>disputes@forthepatient.org</strong> referencing your dispute tracking number. Appeals are re-investigated from the beginning against the underlying source data, independently of the original resolution's reasoning. ForThePatient.org is currently a small, independent operation; where review by a second person — including external subject-matter reviewers — is possible, we use it, and as the organization grows, independent second review will become the standard for every appeal.</p>
                 <p>Appeals must be filed within 60 calendar days of the original resolution. We commit to resolving appeals within an additional 30 calendar days.</p>
                 <p>Appeal resolutions are also published in the public audit trail.</p>
             </div>
