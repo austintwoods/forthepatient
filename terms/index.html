@@ -1,6 +1,12 @@
 <!--
-  ForThePatient.org — Terms of Use (Session I)
-  Static content page matching v4.0 design system.
+  ForThePatient.org — Terms of Use · CONTENT-FIX-1 (Aug 8, 2026)
+  Entity-claim fix (D156 / #25): §1 "a Georgia 501(c)(3) nonprofit corporation"
+  -> "an independent nonprofit initiative ... 501(c)(3) formation underway"
+  (Q-63). Atlanta basing removed from Contact (Q-64: jurisdiction silence).
+  "Last updated" bumped per §10. DELIBERATELY UNCHANGED, flagged for J-ORG
+  counsel: §11 governing law/venue (Georgia/Fulton County — venue + anti-SLAPP
+  analysis is a J-ORG input; do not change without counsel). Nav label unified
+  to "Methodology" (hidden <=414px, mirroring index v5.12). v4.0 design system.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -60,8 +66,10 @@
             .page-layout{padding:24px 16px 60px;gap:0}
             .page-title{font-size:1.5rem}
             .logo-sub{display:none}
+            .nav-btn{padding:6px 8px}
             .page-footer{flex-direction:column;align-items:flex-start}
         }
+        @media(max-width:414px){.nav-btn[href="/methodology"]{display:none}.logo{font-size:1rem}.header-right{gap:6px}}
     </style>
 </head>
 <body>
@@ -71,7 +79,7 @@
             <div class="header-right">
                 <a class="nav-btn" href="/" aria-label="Map">Map</a>
                 <a class="nav-btn" href="/about" aria-label="About">About</a>
-                <a class="nav-btn" href="/methodology" aria-label="Methodology">Method</a>
+                <a class="nav-btn" href="/methodology" aria-label="Methodology">Methodology</a>
                 <button class="toggle-switch" id="theme-toggle-btn" onclick="toggleTheme()" role="switch" aria-checked="false" aria-label="Toggle dark mode"><div class="toggle-slider"><i class="fas fa-sun" aria-hidden="true"></i></div></button>
             </div>
         </div>
@@ -96,11 +104,11 @@
 
         <main class="page-body" role="main">
             <h1 class="page-title">Terms of Use</h1>
-            <p class="page-subtitle">Effective: April 27, 2026 &middot; Last updated: April 27, 2026</p>
+            <p class="page-subtitle">Effective: April 27, 2026 &middot; Last updated: August 8, 2026</p>
 
             <div class="section" id="acceptance">
                 <h2 class="section-anchor">1. Acceptance of Terms</h2>
-                <p>By accessing or using ForThePatient.org (the "Site"), you agree to be bound by these Terms of Use ("Terms"). If you do not agree to these Terms, do not use the Site. These Terms constitute a legally binding agreement between you and ForThePatient.org, a Georgia 501(c)(3) nonprofit corporation ("we," "us," "our").</p>
+                <p>By accessing or using ForThePatient.org (the "Site"), you agree to be bound by these Terms of Use ("Terms"). If you do not agree to these Terms, do not use the Site. These Terms constitute a legally binding agreement between you and ForThePatient.org, an independent nonprofit initiative ("we," "us," "our"). Formal 501(c)(3) incorporation is underway; upon formation, these Terms will apply between you and the successor nonprofit entity.</p>
             </div>
 
             <div class="section" id="description">
@@ -151,13 +159,13 @@
 
             <div class="section" id="liability">
                 <h2 class="section-anchor">8. Limitation of Liability</h2>
-                <p>TO THE FULLEST EXTENT PERMITTED BY LAW, FORTHEPATIENT.ORG, ITS DIRECTORS, OFFICERS, EMPLOYEES, AND VOLUNTEERS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING OUT OF OR RELATING TO YOUR USE OF THE SITE, INCLUDING BUT NOT LIMITED TO DAMAGES FOR LOSS OF PROFITS, DATA, OR OTHER INTANGIBLE LOSSES.</p>
+                <p>TO THE FULLEST EXTENT PERMITTED BY LAW, FORTHEPATIENT.ORG, ITS OPERATOR, AND ANY FUTURE DIRECTORS, OFFICERS, EMPLOYEES, AND VOLUNTEERS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING OUT OF OR RELATING TO YOUR USE OF THE SITE, INCLUDING BUT NOT LIMITED TO DAMAGES FOR LOSS OF PROFITS, DATA, OR OTHER INTANGIBLE LOSSES.</p>
                 <p>OUR TOTAL AGGREGATE LIABILITY FOR ANY CLAIMS ARISING FROM YOUR USE OF THE SITE SHALL NOT EXCEED ONE HUNDRED DOLLARS ($100).</p>
             </div>
 
             <div class="section" id="indemnification">
                 <h2 class="section-anchor">9. Indemnification</h2>
-                <p>You agree to indemnify, defend, and hold harmless ForThePatient.org and its directors, officers, employees, and volunteers from any claims, damages, losses, or expenses (including reasonable attorneys' fees) arising from your use of the Site, your violation of these Terms, or your violation of any third-party rights.</p>
+                <p>You agree to indemnify, defend, and hold harmless ForThePatient.org, its operator, and any future directors, officers, employees, and volunteers from any claims, damages, losses, or expenses (including reasonable attorneys' fees) arising from your use of the Site, your violation of these Terms, or your violation of any third-party rights.</p>
             </div>
 
             <div class="section" id="modifications">
@@ -174,7 +182,7 @@
             <div class="section" id="contact">
                 <h2 class="section-anchor">12. Contact</h2>
                 <p>Questions about these Terms should be directed to:</p>
-                <p>ForThePatient.org<br>Atlanta, Georgia<br><strong>legal@forthepatient.org</strong></p>
+                <p>ForThePatient.org<br><strong>legal@forthepatient.org</strong></p>
             </div>
         </main>
     </div>
