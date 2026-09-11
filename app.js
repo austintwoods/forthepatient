@@ -1,4 +1,29 @@
-    /*
+/*  ============================================================================
+      ForThePatient.org — app.js v1.9 (Session BRAND-1 — September 11 2026)
+      RE-SKIN ONLY: icon markup + the JS-resolved color table + this block.
+      Pairs with index.html v6.0. No behavior, flow, RPC, data-path or layout
+      change (byte-diff archived: BRAND-1_report.md §B). Changelog vs v1.8:
+        ICONS (⧖D178): Font Awesome removed. Every <i class="fas fa-*"> becomes
+              icon('name') — an inline <svg class="ic"> from the ICONS set
+              (original stroke geometry, shared with the static pages). The
+              .icon values in FACILITY_TYPES / SPECIALTIES / CAPABILITIES are
+              now ICONS keys. copyFacilityLink / toggleTheme / init swap the
+              svg markup instead of an <i> className. Harness asserts no
+              'fa-' class remains.
+        BANDS (⧖D173, Inv #8): CLASS_COLORS / scoreToClassColor / LEGEND_ITEMS
+              read the band set (light + dark variants; classColor() picks by
+              currentTheme so markers, pies, pills and the legend re-resolve on
+              toggle — FA-2's visibleFacilities() re-render already covers
+              markers; buildLegend() is now re-called in toggleTheme for the
+              legend). Text on any band is var(--band-text) (was #2C3E50 on
+              pastels). Unrated dots carry .unrated → outline-only (⧖Inv #46).
+              theme-color meta: #F6F5F1 / #17122A. The in-sheet legend line and
+              the map legend's ring line describe the NEW palette (the old
+              copy named green/red pastels and "darker red = more severe",
+              which ⧖D173 retired — one flag red, severity by ring weight and
+              word). sheetLinksHtml nav labels follow the header (How we score /
+              Corrections; hrefs unchanged). No other string changed.
+    ----------------------------------------------------------------------------
       ForThePatient.org — app.js v1.8 (Session FE-AUDIT-MOBILE — August 2026)
       Two small WIRING fixes found by the pre-promotion code audit. Pure frontend;
       NO backend/RPC/param/schema change; NO new colors (#18); NO geometry change
@@ -203,9 +228,9 @@
     const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5oYWpud2ZmeGx6dG1vYWRxY2RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTA1NzAsImV4cCI6MjA4ODMyNjU3MH0.lUVbH_ka0LS8B6xuQJG8KuOdwgk7lTejl9dPfzSUHwQ';
     const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
     const STATE_ZOOM=7;
-    const FACILITY_TYPES=[{value:'hospital',label:'Hospitals',icon:'fa-hospital'},{value:'nursing_home',label:'Nursing Homes',icon:'fa-house-medical'},{value:'dialysis',label:'Dialysis',icon:'fa-droplet'},{value:'home_health',label:'Home Health',icon:'fa-house-chimney-medical'},{value:'hospice',label:'Hospice',icon:'fa-hand-holding-heart'},{value:'irf',label:'Rehab (IRF)',icon:'fa-person-walking'},{value:'ltch',label:'Long-Term (LTCH)',icon:'fa-bed-pulse'}];
+    const FACILITY_TYPES=[{value:'hospital',label:'Hospitals',icon:'hospital'},{value:'nursing_home',label:'Nursing Homes',icon:'house-plus'},{value:'dialysis',label:'Dialysis',icon:'droplet'},{value:'home_health',label:'Home Health',icon:'house-heart'},{value:'hospice',label:'Hospice',icon:'heart-hand'},{value:'irf',label:'Rehab (IRF)',icon:'walk'},{value:'ltch',label:'Long-Term (LTCH)',icon:'bed'}];
     const TYPE_LABEL=Object.fromEntries(FACILITY_TYPES.map(t=>[t.value,t.label]));
-    const SPECIALTIES=[{key:'er',label:'ER',icon:'fa-truck-medical'},{key:'nicu',label:'NICU',icon:'fa-baby'},{key:'trauma',label:'Trauma',icon:'fa-kit-medical'},{key:'teaching',label:'Teaching',icon:'fa-graduation-cap'},{key:'cath',label:'Cardiac Cath',icon:'fa-heart-pulse'}];
+    const SPECIALTIES=[{key:'er',label:'ER',icon:'ambulance'},{key:'nicu',label:'NICU',icon:'baby'},{key:'trauma',label:'Trauma',icon:'kit'},{key:'teaching',label:'Teaching',icon:'cap'},{key:'cath',label:'Cardiac Cath',icon:'heart-pulse'}];
     // ── CAP-VIZ: the "Capabilities" filter model ───────────────────────────────
     // Two kinds of capability. SERVER keys map to the five live nearby_facilities
     // boolean params (no new RPC param — Invariant #6). CLIENT keys filter the rows
@@ -214,21 +239,76 @@
     // a missing column can never blank the map. CMI is a numeric "higher-complexity"
     // cut rather than a boolean. `field` is read from a nearby_facilities row.
     const CAPABILITIES=[
-        {key:'er',       label:'Emergency room',   icon:'fa-truck-medical',          kind:'server', hint:'Has an emergency department'},
-        {key:'nicu',     label:'NICU',             icon:'fa-baby',                   kind:'server', hint:'Newborn intensive care'},
-        {key:'cath',     label:'Cardiac cath lab', icon:'fa-heart-pulse',            kind:'server', hint:'Cardiac catheterization'},
-        {key:'trauma',   label:'Trauma center',    icon:'fa-kit-medical',            kind:'server', hint:'Designated trauma center'},
-        {key:'teaching', label:'Teaching hospital',icon:'fa-graduation-cap',         kind:'server', hint:'Academic / teaching status'},
-        {key:'cardsurg', label:'Cardiac surgery',  icon:'fa-heart-circle-bolt',      kind:'client', field:'has_cardiac_surgery', hint:'Open-heart / cardiac surgery'},
-        {key:'mri',      label:'MRI on site',      icon:'fa-magnet',                 kind:'client', field:'has_mri',            hint:'On-site MRI imaging'},
-        {key:'burn',     label:'Burn unit',        icon:'fa-fire',                   kind:'client', field:'has_burn_unit',      hint:'Specialized burn care'},
-        {key:'transplant',label:'Transplant',      icon:'fa-hand-holding-medical',   kind:'client', field:'has_organ_transplant',hint:'Organ transplant program'},
-        {key:'highcmi',  label:'Higher complexity',icon:'fa-layer-group',            kind:'client', field:'case_mix_index', cmiMin:1.75, hint:'Case-mix index ≥ 1.75 (sicker, more complex caseload)'}
+        {key:'er',       label:'Emergency room',   icon:'ambulance',          kind:'server', hint:'Has an emergency department'},
+        {key:'nicu',     label:'NICU',             icon:'baby',                   kind:'server', hint:'Newborn intensive care'},
+        {key:'cath',     label:'Cardiac cath lab', icon:'heart-pulse',            kind:'server', hint:'Cardiac catheterization'},
+        {key:'trauma',   label:'Trauma center',    icon:'kit',            kind:'server', hint:'Designated trauma center'},
+        {key:'teaching', label:'Teaching hospital',icon:'cap',         kind:'server', hint:'Academic / teaching status'},
+        {key:'cardsurg', label:'Cardiac surgery',  icon:'heart-bolt',      kind:'client', field:'has_cardiac_surgery', hint:'Open-heart / cardiac surgery'},
+        {key:'mri',      label:'MRI on site',      icon:'magnet',                 kind:'client', field:'has_mri',            hint:'On-site MRI imaging'},
+        {key:'burn',     label:'Burn unit',        icon:'flame',                   kind:'client', field:'has_burn_unit',      hint:'Specialized burn care'},
+        {key:'transplant',label:'Transplant',      icon:'hand-medical',   kind:'client', field:'has_organ_transplant',hint:'Organ transplant program'},
+        {key:'highcmi',  label:'Higher complexity',icon:'layers',            kind:'client', field:'case_mix_index', cmiMin:1.75, hint:'Case-mix index ≥ 1.75 (sicker, more complex caseload)'}
     ];
     const CAP_SERVER_KEYS=CAPABILITIES.filter(c=>c.kind==='server').map(c=>c.key);
     const CAP_CLIENT=CAPABILITIES.filter(c=>c.kind==='client');
-    const CLASS_COLORS={'Exceptional':'#A0D8A0','Above Average':'#B8E6A0','Average':'#F8D08A','Below Average':'#F0B8A0','Poor':'#E8A0A0','Unrated':'#BDC3C7'};
+    // BRAND-1 (⧖D173): the band set, JS-resolved (Inv #8), light + dark variants.
+    const CLASS_COLORS={'Exceptional':'#1F6E4E','Above Average':'#2F7D50','Average':'#615C6E','Below Average':'#B85C13','Poor':'#8F2A22','Unrated':'#8B8794'};
+    const CLASS_COLORS_DARK={'Exceptional':'#33A176','Above Average':'#3E9963','Average':'#8C86A0','Below Average':'#D27A2E','Poor':'#D25A4E','Unrated':'#8B8794'};
     const CLASS_ORDER=['Exceptional','Above Average','Average','Below Average','Poor','Unrated'];
+    // ── BRAND-1 (⧖D178): the inline icon set. One source, shared with the static
+    // pages (tools/icons.py emits both). 1em square, currentColor stroke.
+    const ICONS={
+        'search':'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/>',
+        'pin':'<path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2.5"/>',
+        'crosshair':'<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+        'flag':'<path d="M5 21V4"/><path d="M5 4h12l-2.5 4L17 12H5"/>',
+        'chevron-down':'<path d="M6 9l6 6 6-6"/>',
+        'chevron-right':'<path d="M9 6l6 6-6 6"/>',
+        'back':'<path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/>',
+        'share':'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>',
+        'link':'<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.5 1.5"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5"/>',
+        'check':'<path d="M5 12.5l4.5 4.5L19 7"/>',
+        'close':'<path d="M6 6l12 12M18 6L6 18"/>',
+        'tack':'<path d="M9 3h6v6l3 3H6l3-3z"/><path d="M12 12v9"/>',
+        'sun':'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+        'moon':'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+        'map':'<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>',
+        'list':'<path d="M8 6h13M8 12h13M8 18h13"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+        'checklist':'<path d="M3 6l2 2 4-4M3 14l2 2 4-4M13 7h8M13 15h8"/>',
+        'filter':'<path d="M3 5h18l-7 8v6l-4 2v-8z"/>',
+        'info':'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+        'history':'<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>',
+        'payment':'<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 12h6M9 16h6"/>',
+        'star':'<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/>',
+        'phone':'<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+        'wifi':'<path d="M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0"/><path d="M12 19.5h.01"/>',
+        'spinner':'<path d="M12 3a9 9 0 1 0 9 9"/>',
+        'alert':'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',
+        'hospital':'<path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16"/><path d="M2 21h20"/><path d="M12 7v6M9 10h6"/><path d="M9 21v-4h6v4"/>',
+        'house-plus':'<path d="M3 11l9-7 9 7"/><path d="M5 10v11h14V10"/><path d="M12 13v5M9.5 15.5h5"/>',
+        'droplet':'<path d="M12 3s-6 6.5-6 11a6 6 0 0 0 12 0c0-4.5-6-11-6-11z"/>',
+        'house-heart':'<path d="M3 11l9-7 9 7"/><path d="M5 10v11h14V10"/><path d="M12 18s-3.2-2-3.2-4a1.7 1.7 0 0 1 3.2-.8 1.7 1.7 0 0 1 3.2.8c0 2-3.2 4-3.2 4z"/>',
+        'heart-hand':'<path d="M4 14h3.5l3.5 2h4a1.5 1.5 0 0 1 0 3H9"/><path d="M4 14v7"/><path d="M15 19l5-1.5a1.5 1.5 0 0 0-1-2.8L13 16"/><path d="M14 11s-3-2-3-4a1.6 1.6 0 0 1 3-.7 1.6 1.6 0 0 1 3 .7c0 2-3 4-3 4z"/>',
+        'walk':'<circle cx="13" cy="4.5" r="1.7"/><path d="M10 21l2-6 3 2 1 4"/><path d="M12 15l-1-5 3-1 2 3 3 1"/><path d="M11 10l-3 1-1 4"/>',
+        'bed':'<path d="M3 19V8"/><path d="M3 13h18v6"/><path d="M3 17h18"/><circle cx="7" cy="10" r="2"/><path d="M11 13v-3h7a3 3 0 0 1 3 3"/>',
+        'ambulance':'<path d="M3 7h10v10H3z"/><path d="M13 10h4l3 3v4h-7"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/><path d="M8 10v4M6 12h4"/>',
+        'baby':'<circle cx="12" cy="9" r="4"/><path d="M6 21a6 6 0 0 1 12 0"/><path d="M10.5 9h.01M13.5 9h.01"/><path d="M12 5c0-1.2 1-1.8 2-1.3"/>',
+        'kit':'<path d="M3 8h18v12H3z"/><path d="M9 8V5h6v3"/><path d="M12 11v6M9 14h6"/>',
+        'cap':'<path d="M2 9l10-4 10 4-10 4z"/><path d="M6 11v5c0 1.5 3 3 6 3s6-1.5 6-3v-5"/><path d="M22 9v6"/>',
+        'heart-pulse':'<path d="M12 20s-8-5-8-11a4 4 0 0 1 8-1.5A4 4 0 0 1 20 9c0 6-8 11-8 11z"/><path d="M4 11h4l1.5-3 2 6 1.5-3h7"/>',
+        'heart-bolt':'<path d="M12 20s-8-5-8-11a4 4 0 0 1 8-1.5A4 4 0 0 1 20 9c0 6-8 11-8 11z"/><path d="M13 7l-3 5h4l-3 5"/>',
+        'magnet':'<path d="M6 3v8a6 6 0 0 0 12 0V3"/><path d="M6 3h4v8a2 2 0 0 0 4 0V3h4"/><path d="M6 7h4M14 7h4"/>',
+        'flame':'<path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1.5 3 2 3 .5-2 0-5 1-8.5z"/>',
+        'hand-medical':'<path d="M4 14h3.5l3.5 2h4a1.5 1.5 0 0 1 0 3H9"/><path d="M4 14v7"/><path d="M15 19l5-1.5a1.5 1.5 0 0 0-1-2.8L13 16"/><path d="M13 3v6M10 6h6"/>',
+        'layers':'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17l9 5 9-5"/>',
+        'ban':'<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+        'document':'<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 11h6M9 15h6M9 19h3"/>',
+        'lock-open':'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/>',
+        'chart':'<path d="M3 20h18"/><path d="M4 16l5-6 4 3 7-8"/>',
+        'language':'<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>'
+    };
+    function icon(n,cls){return'<svg class="ic'+(cls?' '+cls:'')+'" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'+(ICONS[n]||'')+'</svg>'}
     const US_STATES=[{n:'Alabama',s:'AL',lat:32.806671,lng:-86.79113},{n:'Alaska',s:'AK',lat:61.370716,lng:-152.404419},{n:'Arizona',s:'AZ',lat:33.729759,lng:-111.431221},{n:'Arkansas',s:'AR',lat:34.969704,lng:-92.373123},{n:'California',s:'CA',lat:36.116203,lng:-119.681564},{n:'Colorado',s:'CO',lat:39.059811,lng:-105.311104},{n:'Connecticut',s:'CT',lat:41.597782,lng:-72.755371},{n:'Delaware',s:'DE',lat:39.318523,lng:-75.507141},{n:'Florida',s:'FL',lat:27.766279,lng:-81.686783},{n:'Georgia',s:'GA',lat:33.040619,lng:-83.643074},{n:'Hawaii',s:'HI',lat:21.094318,lng:-157.498337},{n:'Idaho',s:'ID',lat:44.240459,lng:-114.478773},{n:'Illinois',s:'IL',lat:40.349457,lng:-88.986137},{n:'Indiana',s:'IN',lat:39.849426,lng:-86.258278},{n:'Iowa',s:'IA',lat:42.011539,lng:-93.210526},{n:'Kansas',s:'KS',lat:38.5266,lng:-96.726486},{n:'Kentucky',s:'KY',lat:37.66814,lng:-84.670067},{n:'Louisiana',s:'LA',lat:31.169546,lng:-91.867805},{n:'Maine',s:'ME',lat:44.693947,lng:-69.381927},{n:'Maryland',s:'MD',lat:39.063946,lng:-76.802101},{n:'Massachusetts',s:'MA',lat:42.230171,lng:-71.530106},{n:'Michigan',s:'MI',lat:43.326618,lng:-84.536095},{n:'Minnesota',s:'MN',lat:45.694454,lng:-93.900192},{n:'Mississippi',s:'MS',lat:32.741646,lng:-89.678696},{n:'Missouri',s:'MO',lat:38.456085,lng:-92.288368},{n:'Montana',s:'MT',lat:46.921925,lng:-110.454353},{n:'Nebraska',s:'NE',lat:41.12537,lng:-98.268082},{n:'Nevada',s:'NV',lat:38.313515,lng:-117.055374},{n:'New Hampshire',s:'NH',lat:43.452492,lng:-71.563896},{n:'New Jersey',s:'NJ',lat:40.298904,lng:-74.521011},{n:'New Mexico',s:'NM',lat:34.840515,lng:-106.248482},{n:'New York',s:'NY',lat:42.165726,lng:-74.948051},{n:'North Carolina',s:'NC',lat:35.630066,lng:-79.806419},{n:'North Dakota',s:'ND',lat:47.528912,lng:-99.784012},{n:'Ohio',s:'OH',lat:40.388783,lng:-82.764915},{n:'Oklahoma',s:'OK',lat:35.565342,lng:-96.928917},{n:'Oregon',s:'OR',lat:44.572021,lng:-122.070938},{n:'Pennsylvania',s:'PA',lat:40.590752,lng:-77.209755},{n:'Rhode Island',s:'RI',lat:41.680893,lng:-71.51178},{n:'South Carolina',s:'SC',lat:33.856892,lng:-80.945007},{n:'South Dakota',s:'SD',lat:44.299782,lng:-99.438828},{n:'Tennessee',s:'TN',lat:35.747845,lng:-86.692345},{n:'Texas',s:'TX',lat:31.054487,lng:-97.563461},{n:'Utah',s:'UT',lat:40.150032,lng:-111.862434},{n:'Vermont',s:'VT',lat:44.045876,lng:-72.710686},{n:'Virginia',s:'VA',lat:37.769337,lng:-78.169968},{n:'Washington',s:'WA',lat:47.400902,lng:-121.490494},{n:'West Virginia',s:'WV',lat:38.491226,lng:-80.954456},{n:'Wisconsin',s:'WI',lat:44.268543,lng:-89.616508},{n:'Wyoming',s:'WY',lat:42.755966,lng:-107.30249},{n:'District of Columbia',s:'DC',lat:38.897438,lng:-77.026817},{n:'Puerto Rico',s:'PR',lat:18.220833,lng:-66.590149},{n:'Guam',s:'GU',lat:13.444304,lng:144.793731},{n:'U.S. Virgin Islands',s:'VI',lat:18.335765,lng:-64.896335}];
     const STATE_BY_ABBR=Object.fromEntries(US_STATES.map(s=>[s.s,s]));
 
@@ -253,7 +333,7 @@
     let sheetMode='home',sheetView='map',userLocation=null;
     let filteredState=null;
 
-    function classColor(c){return CLASS_COLORS[c]||CLASS_COLORS.Unrated}
+    function classColor(c){const t=currentTheme==='dark'?CLASS_COLORS_DARK:CLASS_COLORS;return t[c]||t.Unrated}
     function classBadgeClass(c){return(!c||c==='Unrated')?'unrated':''}
     // ── ENF-VIZ: enforcement severity (facility-level 4-tier) ───────────────
     // {CRITICAL,SEVERE,MODERATE,MINOR}. Drives the marker ring + flag pill.
@@ -273,7 +353,7 @@
     // result then goes through escapeHtml as before (Invariant #15 still holds).
     function jsq(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
     function scoreToBarColor(s){if(s==null)return'var(--border)';if(s>=7.5)return'#A0D8A0';if(s>=6)return'#B8E6A0';if(s>=4.5)return'#F8D08A';if(s>=3)return'#F0B8A0';return'#E8A0A0'}
-    function scoreToClassColor(s){if(s==null)return'#BDC3C7';if(s>=7.5)return'#A0D8A0';if(s>=6)return'#B8E6A0';if(s>=4.5)return'#F8D08A';if(s>=3)return'#F0B8A0';return'#E8A0A0'}
+    function scoreToClassColor(s){return classColor(s==null?'Unrated':s>=7.5?'Exceptional':s>=6?'Above Average':s>=4.5?'Average':s>=3?'Below Average':'Poor')}
     function haptic(ms){if(isMobile&&navigator.vibrate)try{navigator.vibrate(ms||10)}catch(e){}}
     function checkMobile(){isMobile=window.innerWidth<=768}
     function haversineMiles(lat1,lng1,lat2,lng2){const R=3958.8,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(a))}
@@ -400,7 +480,7 @@
             const size=Math.round(minS+logS*(maxS-minS));
             const fs=size<38?10:size<50?12:14;
             const cfs=Math.max(8,fs-3);
-            const icon=L.divIcon({className:'',html:'<div class="state-bubble" style="width:'+size+'px;height:'+size+'px;background:'+bg+'"><span class="st-abbr" style="font-size:'+fs+'px;color:#2C3E50">'+st+'</span><span class="st-count" style="font-size:'+cfs+'px;color:#2C3E50">'+d.count.toLocaleString()+'</span></div>',iconSize:[size,size],iconAnchor:[size/2,size/2]});
+            const icon=L.divIcon({className:'',html:'<div class="state-bubble" style="width:'+size+'px;height:'+size+'px;background:'+bg+'"><span class="st-abbr" style="font-size:'+fs+'px;color:var(--band-text)">'+st+'</span><span class="st-count" style="font-size:'+cfs+'px;color:var(--band-text)">'+d.count.toLocaleString()+'</span></div>',iconSize:[size,size],iconAnchor:[size/2,size/2]});
             const m=L.marker([si.lat,si.lng],{icon});
             m.on('click',()=>{filteredState=st;updateStateFilterIndicator();if(isMobile)setSheetView('list');map.setView([si.lat,si.lng],STATE_ZOOM)});
             const scoreStr=avg!=null?avg.toFixed(1):'—';
@@ -423,14 +503,14 @@
         const r=size/2;let segs='',sa=0;
         CLASS_ORDER.forEach(cls=>{if(!cnts[cls])return;const pct=cnts[cls]/count,ea=sa+pct*360,lg=pct>.5?1:0,sr=sa*Math.PI/180,er=ea*Math.PI/180;
         const x1=r+r*Math.sin(sr),y1=r-r*Math.cos(sr),x2=r+r*Math.sin(er),y2=r-r*Math.cos(er);
-        if(pct>=.999)segs+='<circle cx="'+r+'" cy="'+r+'" r="'+r+'" fill="'+CLASS_COLORS[cls]+'"/>';
-        else segs+='<path d="M'+r+','+r+' L'+x1+','+y1+' A'+r+','+r+' 0 '+lg+' 1 '+x2+','+y2+' Z" fill="'+CLASS_COLORS[cls]+'"/>';sa=ea});
-        return L.divIcon({html:'<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" xmlns="http://www.w3.org/2000/svg">'+segs+'<circle cx="'+r+'" cy="'+r+'" r="'+(r*.6)+'" fill="'+(currentTheme==='dark'?'#2C3E50':'#FFFFFF')+'"/><text x="'+r+'" y="'+r+'" text-anchor="middle" dominant-baseline="central" font-size="'+(size<48?11:13)+'" font-weight="700" fill="'+(currentTheme==='dark'?'#ECF0F1':'#2C3E50')+'">'+count+'</text></svg>',className:'cluster-pie',iconSize:[size,size],iconAnchor:[size/2,size/2]});
+        if(pct>=.999)segs+='<circle cx="'+r+'" cy="'+r+'" r="'+r+'" fill="'+classColor(cls)+'"/>';
+        else segs+='<path d="M'+r+','+r+' L'+x1+','+y1+' A'+r+','+r+' 0 '+lg+' 1 '+x2+','+y2+' Z" fill="'+classColor(cls)+'"/>';sa=ea});
+        return L.divIcon({html:'<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" xmlns="http://www.w3.org/2000/svg">'+segs+'<circle cx="'+r+'" cy="'+r+'" r="'+(r*.6)+'" fill="'+(currentTheme==='dark'?'#221B38':'#FFFFFF')+'"/><text x="'+r+'" y="'+r+'" text-anchor="middle" dominant-baseline="central" font-size="'+(size<48?11:13)+'" font-weight="700" fill="'+(currentTheme==='dark'?'#F3F0EA':'#231A3D')+'">'+count+'</text></svg>',className:'cluster-pie',iconSize:[size,size],iconAnchor:[size/2,size/2]});
     }
 
     function buildFilterChips(){
         const sc=document.getElementById('chip-scroll');sc.innerHTML='';
-        FACILITY_TYPES.forEach(t=>{const c=document.createElement('button');c.className='f-chip'+(activeTypes.has(t.value)?' active':'');c.dataset.type=t.value;c.setAttribute('role','switch');c.setAttribute('aria-checked',activeTypes.has(t.value));c.setAttribute('aria-label',t.label);c.type='button';c.innerHTML='<i class="fas '+t.icon+'" aria-hidden="true"></i> '+t.label;c.addEventListener('click',()=>{if(activeTypes.has(t.value))activeTypes.delete(t.value);else activeTypes.add(t.value);haptic(10);syncChips();onViewChange()});sc.appendChild(c)});
+        FACILITY_TYPES.forEach(t=>{const c=document.createElement('button');c.className='f-chip'+(activeTypes.has(t.value)?' active':'');c.dataset.type=t.value;c.setAttribute('role','switch');c.setAttribute('aria-checked',activeTypes.has(t.value));c.setAttribute('aria-label',t.label);c.type='button';c.innerHTML=icon(t.icon)+' '+t.label;c.addEventListener('click',()=>{if(activeTypes.has(t.value))activeTypes.delete(t.value);else activeTypes.add(t.value);haptic(10);syncChips();onViewChange()});sc.appendChild(c)});
         syncChips();
     }
 
@@ -519,7 +599,7 @@
         // MODERATE/MINOR rings show in state drill-down (whole state laid out) or at
         // closer zooms, so a dense metro view of thousands of dots stays readable.
         const showRing=sev&&(stateMode||SEV_RANK[sev]>=3||z>=11);
-        const dotCls=stateMode?'ftp-dot ftp-statedot':'ftp-dot';
+        const dotCls=(stateMode?'ftp-dot ftp-statedot':'ftp-dot')+((f.score_classification||'Unrated')==='Unrated'?' unrated':'');
         let html,iconW=ds,anchor=ds/2;
         if(showRing){const pad=SEV_RANK[sev]>=3?7:5;iconW=ds+pad*2;anchor=iconW/2;
             html='<div class="ftp-flag'+(stateMode?' statedot-flag':'')+'" style="width:'+iconW+'px;height:'+iconW+'px"><span class="enf-ring sev-'+SEV_WORD[sev]+'"></span><div class="'+dotCls+'" style="background:'+color+';width:'+ds+'px;height:'+ds+'px"></div></div>';}
@@ -534,14 +614,14 @@
         markers.forEach(m=>layer.addLayer(m));
     }
 
-    function buildPopup(f){const s=f.final_score!=null?f.final_score.toFixed(1):'—';const sev=f.has_active_enforcement?normSev(f.enforcement_severity):null;const enfLine=sev?'<br><span style="display:inline-block;margin-top:4px;font-size:11px;font-weight:600;color:#C0392B"><i class="fas fa-triangle-exclamation"></i> Active enforcement · '+escapeHtml(sev.charAt(0)+sev.slice(1).toLowerCase())+'</span>':'';return'<div><strong>'+escapeHtml(f.facility_name||'')+'</strong><br><span style="color:var(--text-secondary);font-size:11px">'+escapeHtml(TYPE_LABEL[f.facility_type]||'')+'</span><br><span style="display:inline-block;padding:2px 8px;margin-top:4px;border-radius:10px;font-size:11px;font-weight:600;background:'+classColor(f.score_classification)+';color:#2C3E50">'+s+' · '+escapeHtml(f.score_classification||'Unrated')+'</span>'+enfLine+'</div>'}
+    function buildPopup(f){const s=f.final_score!=null?f.final_score.toFixed(1):'—';const sev=f.has_active_enforcement?normSev(f.enforcement_severity):null;const enfLine=sev?'<br><span style="display:inline-block;margin-top:4px;font-size:11px;font-weight:600;color:#C0392B">'+icon('alert')+' Active enforcement · '+escapeHtml(sev.charAt(0)+sev.slice(1).toLowerCase())+'</span>':'';return'<div><strong>'+escapeHtml(f.facility_name||'')+'</strong><br><span style="color:var(--text-secondary);font-size:11px">'+escapeHtml(TYPE_LABEL[f.facility_type]||'')+'</span><br><span style="display:inline-block;padding:2px 8px;margin-top:4px;border-radius:10px;font-size:11px;font-weight:600;background:'+classColor(f.score_classification)+';color:var(--band-text)">'+s+' · '+escapeHtml(f.score_classification||'Unrated')+'</span>'+enfLine+'</div>'}
     function updateStats(rows){const sc=rows.filter(r=>r.final_score!=null);const avg=sc.length>0?(sc.reduce((s,r)=>s+r.final_score,0)/sc.length).toFixed(1):'—';let lbl=activeTypeNoun()+' nearby';if(filteredState&&STATE_BY_ABBR[filteredState])lbl=activeTypeNoun()+' in '+STATE_BY_ABBR[filteredState].n;setStats(rows.length,avg,lbl)}
 
     function showEmptyState(reason){const el=document.getElementById('map-empty-overlay');if(el)el.remove();if(isMobile)return;
-        if(reason==='no-enf'){const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';o.innerHTML='<i class="fas fa-gavel"></i><h4>No flagged facilities in view</h4><p>None of the facilities here are under recent CMS enforcement. Turn off the filter to see all of them, or move the map.</p><button class="clear-btn" type="button" onclick="setEnforcementOnly(false)">Show all facilities</button>';document.getElementById('map-page').appendChild(o);return}
-        if(reason==='no-cap'){const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';o.innerHTML='<i class="fas fa-list-check"></i><h4>No facilities match every capability</h4><p>None of the facilities in view have all the capabilities you selected. Remove a requirement or move the map.</p><button class="clear-btn" type="button" onclick="clearCapabilities()">Clear capabilities</button>';document.getElementById('map-page').appendChild(o);return}
-        if(currentFacilities.length>0)return;const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';if(reason==='no-types')o.innerHTML='<i class="fas fa-filter"></i><h4>No types selected</h4><p>Enable at least one facility type.</p>';else if(filteredState&&STATE_BY_ABBR[filteredState]){const typeNames=Array.from(activeTypes).map(t=>TYPE_LABEL[t]||t).join(', ');o.innerHTML='<i class="fas fa-search"></i><h4>No results in '+escapeHtml(STATE_BY_ABBR[filteredState].n)+'</h4><p>No '+(typeNames||'facilities')+' found in this state. Try adding more facility types or clearing the state filter.</p><button class="clear-btn" type="button" onclick="clearAllFilters()">Clear Filters</button>'}else o.innerHTML='<i class="fas fa-search"></i><h4>No facilities found</h4><p>Try zooming out or adjusting filters.</p><button class="clear-btn" type="button" onclick="clearAllFilters()">Clear Filters</button>';document.getElementById('map-page').appendChild(o)}
-    function showErrorState(err){const el=document.getElementById('map-empty-overlay');if(el)el.remove();const o=document.createElement('div');o.id='map-empty-overlay';o.className='error-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';o.innerHTML='<i class="fas fa-triangle-exclamation"></i><h4>Unable to load</h4><p>'+escapeHtml(err.message||'Error')+'</p><button class="retry-btn" type="button" onclick="onViewChange();this.closest(\'.error-state\').remove()">Retry</button>';document.getElementById('map-page').appendChild(o)}
+        if(reason==='no-enf'){const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';o.innerHTML=''+icon('flag')+'<h4>No flagged facilities in view</h4><p>None of the facilities here are under recent CMS enforcement. Turn off the filter to see all of them, or move the map.</p><button class="clear-btn" type="button" onclick="setEnforcementOnly(false)">Show all facilities</button>';document.getElementById('map-page').appendChild(o);return}
+        if(reason==='no-cap'){const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';o.innerHTML=''+icon('checklist')+'<h4>No facilities match every capability</h4><p>None of the facilities in view have all the capabilities you selected. Remove a requirement or move the map.</p><button class="clear-btn" type="button" onclick="clearCapabilities()">Clear capabilities</button>';document.getElementById('map-page').appendChild(o);return}
+        if(currentFacilities.length>0)return;const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';if(reason==='no-types')o.innerHTML=''+icon('filter')+'<h4>No types selected</h4><p>Enable at least one facility type.</p>';else if(filteredState&&STATE_BY_ABBR[filteredState]){const typeNames=Array.from(activeTypes).map(t=>TYPE_LABEL[t]||t).join(', ');o.innerHTML=''+icon('search')+'<h4>No results in '+escapeHtml(STATE_BY_ABBR[filteredState].n)+'</h4><p>No '+(typeNames||'facilities')+' found in this state. Try adding more facility types or clearing the state filter.</p><button class="clear-btn" type="button" onclick="clearAllFilters()">Clear Filters</button>'}else o.innerHTML=''+icon('search')+'<h4>No facilities found</h4><p>Try zooming out or adjusting filters.</p><button class="clear-btn" type="button" onclick="clearAllFilters()">Clear Filters</button>';document.getElementById('map-page').appendChild(o)}
+    function showErrorState(err){const el=document.getElementById('map-empty-overlay');if(el)el.remove();const o=document.createElement('div');o.id='map-empty-overlay';o.className='error-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';o.innerHTML=''+icon('alert')+'<h4>Unable to load</h4><p>'+escapeHtml(err.message||'Error')+'</p><button class="retry-btn" type="button" onclick="onViewChange();this.closest(\'.error-state\').remove()">Retry</button>';document.getElementById('map-page').appendChild(o)}
     function clearAllFilters(){activeTypes=new Set(FACILITY_TYPES.map(t=>t.value));Object.keys(activeSpecialties).forEach(k=>activeSpecialties[k]=false);enforcementOnly=false;syncEnfFilter();syncCapabilityFilter();filteredState=null;updateStateFilterIndicator();syncChips();const o=document.getElementById('map-empty-overlay');if(o)o.remove();onViewChange()}
     // ── ENF-FILTER + CAP-VIZ client-side capability filter ──────────────────
     // visibleFacilities() composes every CLIENT-SIDE view filter over the rows we
@@ -635,9 +715,9 @@
         return CAPABILITIES.map(c=>{
             const on=!!activeSpecialties[c.key];
             return'<button class="cap-opt'+(on?' on':'')+'" type="button" role="menuitemcheckbox" aria-checked="'+(on?'true':'false')+'" data-cap="'+c.key+'" data-prefix="'+prefix+'">'+
-                '<span class="cap-ic"><i class="fas '+c.icon+'" aria-hidden="true"></i></span>'+
+                '<span class="cap-ic">'+icon(c.icon)+'</span>'+
                 '<span class="cap-text"><span class="cap-label">'+escapeHtml(c.label)+'</span><span class="cap-hint">'+escapeHtml(c.hint)+'</span></span>'+
-                '<span class="cap-check" aria-hidden="true"><i class="fas fa-check"></i></span>'+
+                '<span class="cap-check" aria-hidden="true">'+icon('check')+'</span>'+
             '</button>';
         }).join('');
     }
@@ -680,19 +760,12 @@
     // ── CAP-VIZ (C5-LEGEND): map rating legend ─────────────────────────────
     // A small, always-on key for the dot colors, top-left of the map under the
     // search/filter bar. Reads the documented classification palette only.
-    const LEGEND_ITEMS=[
-        {label:'Exceptional',color:'#A0D8A0'},
-        {label:'Above Average',color:'#B8E6A0'},
-        {label:'Average',color:'#F8D08A'},
-        {label:'Below Average',color:'#F0B8A0'},
-        {label:'Poor',color:'#E8A0A0'},
-        {label:'Unrated',color:'#BDC3C7'}
-    ];
+    const LEGEND_ITEMS=CLASS_ORDER.map(c=>({label:c}));  // colors resolve via classColor() at build time (⧖D173)
     function buildLegend(){
         const el=document.getElementById('map-legend');if(!el)return;
-        const rows=LEGEND_ITEMS.map(i=>'<span class="lg-row"><span class="lg-swatch" style="background:'+i.color+'"></span>'+escapeHtml(i.label)+'</span>').join('');
+        const rows=LEGEND_ITEMS.map(i=>'<span class="lg-row"><span class="lg-swatch'+(i.label==='Unrated'?' unrated':'')+'" style="background:'+classColor(i.label)+'"></span>'+escapeHtml(i.label)+'</span>').join('');
         el.innerHTML='<div class="lg-title">Quality rating</div><div class="lg-rows">'+rows+'</div>'+
-            '<div class="lg-enf"><span class="lg-ring" aria-hidden="true"></span>Red ring = recent CMS enforcement (darker red = more severe)</div>';
+            '<div class="lg-enf"><span class="lg-ring" aria-hidden="true"></span>Red ring = under active CMS survey enforcement (thicker ring = more severe)</div>';
     }
     function showLoading(a){const el=document.getElementById('query-loading');if(a)el.classList.add('active');else el.classList.remove('active')}
 
@@ -705,7 +778,7 @@
         const html=buildFacilityDetailHtml(data);
         if(isMobile)document.getElementById('detail-sheet-body').innerHTML=html;else document.getElementById('facility-info-content').innerHTML=html;
         const f=data.facility||data;const s=f.final_score!=null?f.final_score.toFixed(1):'';document.title=(f.facility_name||'Facility')+' — Quality Score'+(s?' '+s:'')+' | ForThePatient';
-        }catch(e){derr('detail failed',e);const eh='<div class="error-state"><i class="fas fa-triangle-exclamation"></i><h4>Could not load</h4><p>'+escapeHtml(e.message||'')+'</p><button class="retry-btn" type="button" onclick="openFacilityDetail(\''+escapeHtml(jsq(fid))+'\')">Retry</button></div>';if(isMobile)document.getElementById('detail-sheet-body').innerHTML=eh;else document.getElementById('facility-info-content').innerHTML=eh}
+        }catch(e){derr('detail failed',e);const eh='<div class="error-state">'+icon('alert')+'<h4>Could not load</h4><p>'+escapeHtml(e.message||'')+'</p><button class="retry-btn" type="button" onclick="openFacilityDetail(\''+escapeHtml(jsq(fid))+'\')">Retry</button></div>';if(isMobile)document.getElementById('detail-sheet-body').innerHTML=eh;else document.getElementById('facility-info-content').innerHTML=eh}
     }
 
     function buildSkeletonHtml(){return'<div class="facility-info" style="padding-top:14px"><div style="display:flex;justify-content:flex-end;gap:4px;margin-bottom:8px"><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div></div><div class="skeleton-block skeleton-line w70"></div><div class="skeleton-block skeleton-line w40" style="height:8px;margin-bottom:14px"></div><div style="display:flex;gap:14px;align-items:center;margin-bottom:20px"><div class="skeleton-block skeleton-circle"></div><div style="flex:1"><div class="skeleton-block skeleton-line w50"></div><div class="skeleton-block skeleton-line w40" style="height:8px"></div></div></div><div class="skeleton-block skeleton-line w40" style="height:8px;margin-bottom:14px"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div style="margin-top:18px"><div class="skeleton-block skeleton-line w70"></div><div class="skeleton-block skeleton-line w50"></div></div></div>'}
@@ -811,7 +884,7 @@
         const tone=flagged?'flag':(parts[0]?parts[0].tone:'mid');
         const body=parts.map(p=>'<p class="ps-line">'+p.t+'</p>').join('');
         return'<div class="patient-summary tone-'+tone+'" role="note" aria-label="Plain-language summary">'+
-            '<div class="ps-eyebrow"><i class="fas fa-circle-info" aria-hidden="true"></i> What this means for you</div>'+
+            '<div class="ps-eyebrow">'+icon('info')+' What this means for you</div>'+
             body+
             '<div class="ps-foot">A plain-language reading of the data below. <a href="/methodology">How we score</a>.</div>'+
         '</div>';
@@ -828,10 +901,10 @@
         let banner='';
         if(flagged&&sev){
             const word=sev.charAt(0)+sev.slice(1).toLowerCase();
-            banner='<div class="enf-banner sev-'+SEV_WORD[sev]+'"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i><div class="enf-banner-body"><div class="enf-banner-head">Under active enforcement &middot; '+escapeHtml(word)+'</div><div class="enf-banner-sub">CMS has a current, unresolved survey finding on record for this facility. Recent findings are marked <strong>Current</strong> below.</div></div></div>';
+            banner='<div class="enf-banner sev-'+SEV_WORD[sev]+'">'+icon('alert')+'<div class="enf-banner-body"><div class="enf-banner-head">Under active enforcement &middot; '+escapeHtml(word)+'</div><div class="enf-banner-sub">CMS has a current, unresolved survey finding on record for this facility. Recent findings are marked <strong>Current</strong> below.</div></div></div>';
         }else if(!flagged&&(sev||rows.length)){
             // expired label or only-historical records: do NOT present as current
-            banner='<div class="enf-banner expired"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i><div class="enf-banner-body"><div class="enf-banner-head">No active enforcement</div><div class="enf-banner-sub">'+(sev?'A past finding (severity: '+escapeHtml((sev.charAt(0)+sev.slice(1).toLowerCase()))+') has since expired. ':'')+'Any items below are historical and no longer affect the score.</div></div></div>';
+            banner='<div class="enf-banner expired">'+icon('history')+'<div class="enf-banner-body"><div class="enf-banner-head">No active enforcement</div><div class="enf-banner-sub">'+(sev?'A past finding (severity: '+escapeHtml((sev.charAt(0)+sev.slice(1).toLowerCase()))+') has since expired. ':'')+'Any items below are historical and no longer affect the score.</div></div></div>';
         }
         let histHtml='';
         if(rows.length){
@@ -853,9 +926,9 @@
             const allRows=sorted.map(render).join('');
             histHtml='<h3 class="section-header">Survey findings ('+n+')</h3>'+
                 '<div class="enf-disclosure"><button class="enf-disc-btn" type="button" aria-expanded="false" aria-controls="'+pid+'" onclick="toggleEnfHistory(this)">'+
-                    '<i class="fas fa-chevron-right ed-ic" aria-hidden="true"></i>'+
+                    ''+icon('chevron-right','ed-ic')+''+
                     '<span class="ed-label">Show '+n+' '+noun+'</span>'+
-                    '<span class="ed-caret" aria-hidden="true"><i class="fas fa-list"></i></span>'+
+                    '<span class="ed-caret" aria-hidden="true">'+icon('list')+'</span>'+
                 '</button>'+
                 '<div class="enf-disc-panel" id="'+pid+'" hidden><div class="enf-history">'+allRows+'</div>'+
                 '<div class="enf-more">Source: CMS survey deficiency records (QCOR). Findings linger on the score after the survey date, then expire.</div></div></div>';
@@ -883,7 +956,7 @@
         const detail=f.payment_penalty_detail?String(f.payment_penalty_detail):
             'Medicare reduced this hospital\u2019s payments under a readmissions (HRRP) or hospital-acquired-condition (HAC) program. These are routine Medicare payment adjustments and do not, on their own, indicate an immediate safety problem.';
         return'<div class="payment-penalty-block">'+
-            '<div class="payment-penalty-head"><i class="fas fa-file-invoice-dollar" aria-hidden="true"></i> Medicare payment penalties</div>'+
+            '<div class="payment-penalty-head">'+icon('payment')+' Medicare payment penalties</div>'+
             '<div class="payment-penalty-sub">'+escapeHtml(detail)+'</div>'+
             '</div>';
     }
@@ -895,12 +968,12 @@
         const compHtml=comps.length===0?'<div class="component-na">No component data</div>':comps.sort((a,b)=>(a.component_order||0)-(b.component_order||0)).map(c=>{const cs=c.component_score!=null?c.component_score.toFixed(1):'—';const fp=c.component_score!=null?Math.max(0,Math.min(100,(c.component_score/10)*100)):0;return'<div><div class="component-row"><div class="component-name">'+escapeHtml(c.component_name||'')+'</div><div class="component-score">'+cs+'</div></div><div class="component-bar"><div class="component-bar-fill" style="width:'+fp+'%;background:'+scoreToBarColor(c.component_score)+'"></div></div></div>'}).join('');
         const badges=[];if(truthy(f.teaching_status))badges.push('Teaching');if(truthy(f.has_cardiac_cath_lab))badges.push('Cardiac Cath');if(truthy(f.has_cardiac_surgery))badges.push('Cardiac Surgery');if(truthy(f.nicu_level))badges.push('NICU');if(truthy(f.has_trauma_center))badges.push('Trauma Center');if(truthy(f.has_burn_unit))badges.push('Burn Unit');if(truthy(f.has_organ_transplant))badges.push('Transplant');if(truthy(f.has_mri))badges.push('MRI');if(f.case_mix_index!=null)badges.push('CMI '+Number(f.case_mix_index).toFixed(2));
         const bHtml=badges.length?'<div class="specialty-badges">'+badges.map(b=>'<span class="spec-badge">'+escapeHtml(b)+'</span>').join('')+'</div>':'';
-        const eHtml=enf.length?'<div class="enforcement-block"><div class="enforcement-title"><i class="fas fa-gavel"></i> '+enf.length+' regulatory action'+(enf.length===1?'':'s')+'</div>'+enf.slice(0,5).map(e=>'<div class="enforcement-amt">'+escapeHtml(e.penalty_type||'Penalty')+(e.amount?' · $'+Number(e.amount).toLocaleString():'')+(e.penalty_date?' · '+escapeHtml(String(e.penalty_date).slice(0,10)):'')+'</div>').join('')+(enf.length>5?'<div class="enforcement-amt">+ '+(enf.length-5)+' more</div>':'')+'</div>':'';
-        const cmsLine=stars?'<span class="cms-stars">CMS overall: '+'<i class="fas fa-star star-icon"></i>'.repeat(Math.round(stars))+' '+stars+'/5</span>':'';
+        const eHtml=enf.length?'<div class="enforcement-block"><div class="enforcement-title">'+icon('flag')+' '+enf.length+' regulatory action'+(enf.length===1?'':'s')+'</div>'+enf.slice(0,5).map(e=>'<div class="enforcement-amt">'+escapeHtml(e.penalty_type||'Penalty')+(e.amount?' · $'+Number(e.amount).toLocaleString():'')+(e.penalty_date?' · '+escapeHtml(String(e.penalty_date).slice(0,10)):'')+'</div>').join('')+(enf.length>5?'<div class="enforcement-amt">+ '+(enf.length-5)+' more</div>':'')+'</div>':'';
+        const cmsLine=stars?'<span class="cms-stars">CMS overall: '+icon('star','star-icon').repeat(Math.round(stars))+' '+stars+'/5</span>':'';
         const psHtml=buildPatientSummary(f,hospEnf);
         const enfVizHtml=buildEnforcementHtml(f,hospEnf);
         const payHtml=buildPaymentPenaltyHtml(f);
-        return'<div class="facility-info"><div class="detail-header-actions"><button class="detail-action-btn" type="button" onclick="copyFacilityLink(\''+escapeHtml(jsq(f.facility_id))+'\')" aria-label="Copy link" title="Copy link"><i class="fas fa-link"></i></button><button class="detail-action-btn" type="button" onclick="shareFacility(\''+escapeHtml(jsq(f.facility_id))+'\',\''+escapeHtml(jsq(f.facility_name))+'\')" aria-label="Share" title="Share"><i class="fas fa-share-nodes"></i></button><button class="detail-action-btn" type="button" data-pin onclick="togglePinPanel()" aria-label="Pin" title="Pin"><i class="fas fa-thumbtack"></i></button><button class="detail-action-btn" type="button" onclick="closeFacilityInfo()" aria-label="Close" title="Close"><i class="fas fa-times"></i></button></div><div class="facility-header"><h2 class="facility-name">'+escapeHtml(f.facility_name||'')+'</h2><div class="facility-type-line">'+escapeHtml(TYPE_LABEL[f.facility_type]||f.facility_type||'')+'</div><div class="score-block"><div class="score-circle '+(cls==='Unrated'?'unrated':'')+'" style="background:'+classColor(cls)+'">'+score+'</div><div class="score-meta"><span class="classification-badge '+classBadgeClass(cls)+'" style="background:'+classColor(cls)+'">'+escapeHtml(cls)+'</span><span class="score-out-of">FTP score · 1 (weakest) to 10 (strongest)</span>'+cmsLine+'</div></div>'+bHtml+'</div>'+psHtml+'<h3 class="section-header">Component breakdown</h3><p class="section-note">The score combines these measures. Each is shown on the same 1&ndash;10 scale, so you can see where this facility is strong or weak.</p>'+compHtml+eHtml+enfVizHtml+payHtml+'<div class="addr-block">'+(f.address?'<div><i class="fas fa-map-marker-alt"></i>'+escapeHtml(f.address||'')+'</div>':'')+'<div style="padding-left:20px">'+escapeHtml(f.city||'')+(f.city?', ':'')+escapeHtml(f.state||'')+' '+escapeHtml(f.zip_code||'')+'</div>'+(f.phone?'<div><i class="fas fa-phone"></i>'+escapeHtml(f.phone)+'</div>':'')+'</div><a href="https://maps.google.com/?q='+f.latitude+','+f.longitude+'" target="_blank" rel="noopener noreferrer" class="directions-btn">Get Directions</a><div class="print-methodology-url">Methodology: https://forthepatient.org/methodology</div></div>';
+        return'<div class="facility-info"><div class="detail-header-actions"><button class="detail-action-btn" type="button" onclick="copyFacilityLink(\''+escapeHtml(jsq(f.facility_id))+'\')" aria-label="Copy link" title="Copy link">'+icon('link')+'</button><button class="detail-action-btn" type="button" onclick="shareFacility(\''+escapeHtml(jsq(f.facility_id))+'\',\''+escapeHtml(jsq(f.facility_name))+'\')" aria-label="Share" title="Share">'+icon('share')+'</button><button class="detail-action-btn" type="button" data-pin onclick="togglePinPanel()" aria-label="Pin" title="Pin">'+icon('tack')+'</button><button class="detail-action-btn" type="button" onclick="closeFacilityInfo()" aria-label="Close" title="Close">'+icon('close')+'</button></div><div class="facility-header"><h2 class="facility-name">'+escapeHtml(f.facility_name||'')+'</h2><div class="facility-type-line">'+escapeHtml(TYPE_LABEL[f.facility_type]||f.facility_type||'')+'</div><div class="score-block"><div class="score-circle '+(cls==='Unrated'?'unrated':'')+'" style="background:'+classColor(cls)+'">'+score+'</div><div class="score-meta"><span class="classification-badge '+classBadgeClass(cls)+'" style="background:'+classColor(cls)+'">'+escapeHtml(cls)+'</span><span class="score-out-of">FTP score · 1 (weakest) to 10 (strongest)</span>'+cmsLine+'</div></div>'+bHtml+'</div>'+psHtml+'<h3 class="section-header">Component breakdown</h3><p class="section-note">The score combines these measures. Each is shown on the same 1&ndash;10 scale, so you can see where this facility is strong or weak.</p>'+compHtml+eHtml+enfVizHtml+payHtml+'<div class="addr-block">'+(f.address?'<div>'+icon('pin')+''+escapeHtml(f.address||'')+'</div>':'')+'<div style="padding-left:20px">'+escapeHtml(f.city||'')+(f.city?', ':'')+escapeHtml(f.state||'')+' '+escapeHtml(f.zip_code||'')+'</div>'+(f.phone?'<div>'+icon('phone')+''+escapeHtml(f.phone)+'</div>':'')+'</div><a href="https://maps.google.com/?q='+f.latitude+','+f.longitude+'" target="_blank" rel="noopener noreferrer" class="directions-btn">Get Directions</a><div class="print-methodology-url">Methodology: https://forthepatient.org/methodology</div></div>';
     }
 
     function closeFacilityInfo(){
@@ -910,7 +983,7 @@
         else document.getElementById('info-panel').classList.remove('active','pinned');
         pushUrlState(true);
     }
-    function copyFacilityLink(id){const url=location.origin+location.pathname+'?fid='+encodeURIComponent(id);navigator.clipboard.writeText(url).then(()=>{const b=document.querySelector('.detail-action-btn[onclick*="copyFacilityLink"]');if(b){const i=b.querySelector('i');i.className='fas fa-check';setTimeout(()=>{i.className='fas fa-link'},1500)}}).catch(()=>{})}
+    function copyFacilityLink(id){const url=location.origin+location.pathname+'?fid='+encodeURIComponent(id);navigator.clipboard.writeText(url).then(()=>{const b=document.querySelector('.detail-action-btn[onclick*="copyFacilityLink"]');if(b){b.innerHTML=icon('check');setTimeout(()=>{b.innerHTML=icon('link')},1500)}}).catch(()=>{})}
     function shareFacility(id,name){const url=location.origin+location.pathname+'?fid='+encodeURIComponent(id);if(navigator.share)navigator.share({title:name+' — Quality Score | ForThePatient',url}).catch(()=>{});else copyFacilityLink(id)}
     function togglePinPanel(){const p=document.getElementById('info-panel');detailPanelPinned=!detailPanelPinned;p.classList.toggle('pinned',detailPanelPinned);if(detailPanelPinned)p.style.width='';setTimeout(()=>map.invalidateSize(),350)}
 
@@ -933,7 +1006,7 @@
 
     function wireResizeHandle(){const h=document.getElementById('resize-handle'),p=document.getElementById('info-panel');if(!h||!p)return;let sx,sw;function md(e){e.preventDefault();sx=e.clientX;sw=p.offsetWidth;document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu)}function mm(e){p.style.width=Math.max(320,Math.min(600,sw+(sx-e.clientX)))+'px'}function mu(){document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu)}h.addEventListener('mousedown',md)}
 
-    function toggleTheme(){currentTheme=currentTheme==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',currentTheme);try{localStorage.setItem('theme',currentTheme)}catch(e){}const btn=document.getElementById('theme-toggle-btn');btn.classList.toggle('active',currentTheme==='dark');btn.setAttribute('aria-checked',currentTheme==='dark');btn.querySelector('.toggle-slider i').className=currentTheme==='dark'?'fas fa-moon':'fas fa-sun';document.querySelector('meta[name="theme-color"]').content=currentTheme==='dark'?'#1A1F36':'#FDF8F0';map.eachLayer(l=>{if(l instanceof L.TileLayer)map.removeLayer(l)});L.tileLayer(currentTheme==='dark'?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png':'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; CARTO &middot; CMS public data',subdomains:'abcd',maxZoom:20}).addTo(map);if(currentViewMode==='facility'&&currentFacilities.length)renderMarkers(visibleFacilities());else if(currentViewMode==='state')renderStateBubbles();pushUrlState(true)}
+    function toggleTheme(){currentTheme=currentTheme==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',currentTheme);try{localStorage.setItem('theme',currentTheme)}catch(e){}const btn=document.getElementById('theme-toggle-btn');btn.classList.toggle('active',currentTheme==='dark');btn.setAttribute('aria-checked',currentTheme==='dark');btn.querySelector('.toggle-slider').innerHTML=icon(currentTheme==='dark'?'moon':'sun');document.querySelector('meta[name="theme-color"]').content=currentTheme==='dark'?'#17122A':'#F6F5F1';map.eachLayer(l=>{if(l instanceof L.TileLayer)map.removeLayer(l)});L.tileLayer(currentTheme==='dark'?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png':'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; CARTO &middot; CMS public data',subdomains:'abcd',maxZoom:20}).addTo(map);if(currentViewMode==='facility'&&currentFacilities.length)renderMarkers(visibleFacilities());else if(currentViewMode==='state')renderStateBubbles();buildLegend();pushUrlState(true)}
 
     // ─── v5.0 mobile home sheet ──────────────────────────────────────────────
     function buildSheetChips(){
@@ -943,7 +1016,7 @@
             c.className='sheet-chip'+(activeTypes.has(t.value)?' on':'');
             c.dataset.type=t.value;c.type='button';c.setAttribute('role','switch');
             c.setAttribute('aria-checked',activeTypes.has(t.value));c.setAttribute('aria-label',t.label);
-            c.innerHTML='<i class="fas '+t.icon+'" aria-hidden="true"></i> '+t.label;
+            c.innerHTML=icon(t.icon)+' '+t.label;
             c.addEventListener('click',()=>{if(activeTypes.has(t.value))activeTypes.delete(t.value);else activeTypes.add(t.value);haptic(10);syncChips();onViewChange()});
             el.appendChild(c);
         });
@@ -1028,7 +1101,7 @@
             return'<button class="sheet-frow" type="button" data-id="'+escapeHtml(f.facility_id)+'"><span class="sc '+(cls==='Unrated'?'unrated':'')+'" style="background:'+sc+'">'+st+'</span><span class="fmeta"><span class="fnm">'+escapeHtml(f.facility_name||'')+'</span><span class="fsub">'+escapeHtml(TYPE_LABEL[f.facility_type]||'')+' · '+escapeHtml(cls)+'</span></span>'+flag+dist+'</button>';
         }).join('');
         if(rows.length>CAP)html+='<div class="sheet-guide" style="padding:14px 10px"><p>Showing the nearest '+CAP+' of '+rows.length.toLocaleString()+'. Zoom in on the map to narrow it down.</p></div>';
-        html+='<div class="sheet-legend">Scores run 1&ndash;10. <span class="lg-dot" style="background:var(--cls-excep)"></span><span class="lg-dot" style="background:var(--cls-average)"></span><span class="lg-dot" style="background:var(--cls-poor)"></span> Green is stronger, red is weaker, gray means not enough public data to rate.</div>';
+        html+='<div class="sheet-legend">Scores run 1&ndash;10. <span class="lg-dot" style="background:var(--band-exceptional)"></span><span class="lg-dot" style="background:var(--band-average)"></span><span class="lg-dot" style="background:var(--band-poor)"></span> Green is stronger, orange and brick are weaker, an outline means not enough public data to rate.</div>';
         html+=sheetLinksHtml();
         wrap.innerHTML=html;
         wrap.querySelectorAll('.sheet-frow[data-id]').forEach(it=>it.addEventListener('click',()=>{
@@ -1041,16 +1114,16 @@
         const wrap=document.getElementById('sheet-list');if(!wrap)return;
         // MOBILE-CLEAN-1: copy no longer references the removed "Near me" button or
         // the removed mobile search box. Guidance points at the map + the toggle.
-        let icon='fa-magnifying-glass-location',h='Find a facility',p='Pan or zoom the map to your area, or tap a state to zoom in. Tap a point to see its quality details.';
-        if(kind==='empty'){icon='fa-map-location-dot';h='No facilities here yet';p='Zoom out or move the map to find facilities nearby.';}
-        else if(kind==='location-off'){icon='fa-location-crosshairs';h='Location is off';p='No problem — pan the map to your area, or tap a state to zoom in.';}
-        else if(kind==='state-loading'){icon='fa-spinner fa-spin';h='Loading facilities…';p='One moment.';}
-        else if(kind==='no-types'){icon='fa-filter';h='No types selected';p='Pick at least one facility type above to see results.';}
-        else if(kind==='no-enf'){icon='fa-gavel';h='No flagged facilities here';p='None of the facilities in view are under recent CMS enforcement. Move the map to look elsewhere.';}
-        else if(kind==='no-cap'){icon='fa-list-check';h='No facilities match every capability';p='None of the facilities here have all the required capabilities. Move the map to look elsewhere.';}
-        wrap.innerHTML='<div class="sheet-guide"><i class="fas '+icon+'" aria-hidden="true"></i><h4>'+h+'</h4><p>'+p+'</p></div>'+sheetLinksHtml();
+        let ic='search',h='Find a facility',p='Pan or zoom the map to your area, or tap a state to zoom in. Tap a point to see its quality details.';
+        if(kind==='empty'){ic='map';h='No facilities here yet';p='Zoom out or move the map to find facilities nearby.';}
+        else if(kind==='location-off'){ic='crosshair';h='Location is off';p='No problem — pan the map to your area, or tap a state to zoom in.';}
+        else if(kind==='state-loading'){ic='spinner';h='Loading facilities…';p='One moment.';}
+        else if(kind==='no-types'){ic='filter';h='No types selected';p='Pick at least one facility type above to see results.';}
+        else if(kind==='no-enf'){ic='flag';h='No flagged facilities here';p='None of the facilities in view are under recent CMS enforcement. Move the map to look elsewhere.';}
+        else if(kind==='no-cap'){ic='checklist';h='No facilities match every capability';p='None of the facilities here have all the required capabilities. Move the map to look elsewhere.';}
+        wrap.innerHTML='<div class="sheet-guide">'+icon(ic,ic==='spinner'?'spin':'')+'<h4>'+h+'</h4><p>'+p+'</p></div>'+sheetLinksHtml();
     }
-    function sheetLinksHtml(){return'<div class="sheet-links"><a href="/about">About</a><a href="/methodology">Methodology</a><a href="/medical-disclaimer">Disclaimer</a><a href="/dispute-process">Dispute</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>'}
+    function sheetLinksHtml(){return'<div class="sheet-links"><a href="/about">About</a><a href="/methodology">How we score</a><a href="/medical-disclaimer">Disclaimer</a><a href="/dispute-process">Corrections</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>'}
     // MOBILE-CLEAN-1: setSheetContent now drives the CSS state machine via the
     // data-mode attribute on #detail-sheet. data-view (map|list) is held in JS and
     // applied by setSheetView. No element-hidden juggling beyond the home/detail
@@ -1112,8 +1185,8 @@
         if(currentTheme==='dark'){
             const b=document.getElementById('theme-toggle-btn');
             b.classList.add('active');b.setAttribute('aria-checked','true');
-            b.querySelector('.toggle-slider i').className='fas fa-moon';
-            document.querySelector('meta[name="theme-color"]').content='#1A1F36';
+            b.querySelector('.toggle-slider').innerHTML=icon('moon');
+            document.querySelector('meta[name="theme-color"]').content='#17122A';
         }
         initMap();
         setupOfflineDetection();
