@@ -1,4 +1,21 @@
 <!--
+  ForThePatient.org v5.12 (Session CONTENT-FIX-1 — Aug 8 2026)
+  Truthful-copy pass (Known Issue #26; handoff v9.2). COPY + one nav-label CSS
+  rule ONLY. Pairs with app.js v1.8 (deploy together). NO backend/RPC/schema
+  change; NO new colors (#18); NO geometry change beyond the nav-label item
+  below (flagged for the 17.19 device pass). Changelog vs v5.11:
+    1. Meta description: "quality scores covering 48,000+ … facilities" —
+       covered-not-scored phrasing per Inv #42 (exact counts live only beside
+       the data-vintage stamp; ~10% of covered facilities are Unrated).
+    2. Desktop cold empty state (#info-panel) warmed: invites map click OR name
+       search instead of the cold "Select a Facility".
+    3. Header nav label "Method" -> "Methodology" (matches footer + page
+       titles). Its hide rule moves from the <=380px block to its own <=414px
+       rule (longer label needs the earlier cutoff); ON-DEVICE eyeball of the
+       381-480px header is part of the owed 17.19 device pass.
+  NOTE: this entry + the CSS move shift line numbers vs v5.11 — B5 anchors in
+  handoff v9.2 are updated to v5.12 numbering.
+  ----------------------------------------------------------------------------
   ForThePatient.org v5.11 (Session ATTRIB-FIX-2 — July 2026)
   Fixes the on-device attribution regression v5.10 shipped to prod (Known Issues
   #24b). Pairs with app.js v1.7. Pure frontend; NO backend/RPC/schema change; NO
@@ -266,7 +283,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
     <title>For The Patient — Healthcare Quality Map</title>
-    <meta name="description" content="Independent quality scores for 48,000+ Medicare-certified facilities. Hospitals, nursing homes, dialysis, home health, hospice, IRF, LTCH. Built from compulsory CMS data. Zero industry funding.">
+    <meta name="description" content="Independent quality scores covering 48,000+ Medicare-certified facilities. Hospitals, nursing homes, dialysis, home health, hospice, IRF, LTCH. Built from compulsory CMS data. Zero industry funding.">
     <meta name="theme-color" content="#FDF8F0">
     <script>
     // Early theme init: apply persisted theme before body renders to prevent flash.
@@ -515,8 +532,9 @@
             .toggle-switch{width:40px;min-width:40px;height:24px}
             .toggle-switch .toggle-slider{width:20px;height:20px}
             .toggle-switch.active .toggle-slider{transform:translateX(16px)}
-            .nav-btn[href="/methodology"]{display:none}
+            /* CONTENT-FIX-1: methodology-hide moved to its own <=414px rule below (longer label) */
         }
+        @media(max-width:414px){.nav-btn[href="/methodology"]{display:none}}
         @media print{
             body{background:#fff;color:#000;overflow:visible;height:auto}
             .header,#map,.filter-bar,.map-legend,.footer-bar,.loading-overlay,.query-loading,.bottom-sheet,.offline-toast,.detail-action-btn,.resize-handle,.directions-btn{display:none!important}
@@ -790,7 +808,7 @@
             <div class="header-right">
                 <a class="nav-btn active" href="/" aria-label="Map" aria-current="page">Map</a>
                 <a class="nav-btn" href="/about" aria-label="About">About</a>
-                <a class="nav-btn" href="/methodology" aria-label="Methodology">Method</a>
+                <a class="nav-btn" href="/methodology" aria-label="Methodology">Methodology</a>
                 <button class="toggle-switch" id="theme-toggle-btn" onclick="toggleTheme()" role="switch" aria-checked="false" aria-label="Toggle dark mode" type="button"><div class="toggle-slider"><i class="fas fa-sun" aria-hidden="true"></i></div></button>
             </div>
         </div>
@@ -812,7 +830,7 @@
             <div class="stats-inline" aria-live="polite"><span class="stat-item"><strong id="total-count">0</strong><span class="stats-label">&nbsp;in view</span></span><span class="stat-item"><span class="stats-label">avg&nbsp;</span><strong id="avg-score">—</strong></span></div>
         </div>
         <div class="map-legend" id="map-legend" aria-label="Map rating legend"></div>
-        <aside class="info-panel" id="info-panel" role="dialog" aria-modal="false" aria-label="Facility details"><div class="resize-handle" id="resize-handle" aria-hidden="true"></div><div id="facility-info-content"><div class="empty-state"><i class="fas fa-map-marker-alt" aria-hidden="true"></i><h4>Select a Facility</h4><p>Click any point on the map to view detailed quality scores</p></div></div></aside>
+        <aside class="info-panel" id="info-panel" role="dialog" aria-modal="false" aria-label="Facility details"><div class="resize-handle" id="resize-handle" aria-hidden="true"></div><div id="facility-info-content"><div class="empty-state"><i class="fas fa-map-marker-alt" aria-hidden="true"></i><h4>Find care you can trust</h4><p>Click any facility on the map to see its score and what it means in plain language — or search by name above.</p></div></div></aside>
         <div class="footer-bar" aria-label="Legal"><a href="/about">About</a><a href="/methodology">Methodology</a><a href="/medical-disclaimer">Disclaimer</a><a href="/dispute-process">Dispute</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>
     </main>
 
