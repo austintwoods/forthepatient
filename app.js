@@ -1,7 +1,7 @@
 /*  ============================================================================
-      ForThePatient.org — app.js v1.9 (Session BRAND-1 — September 11 2026)
+      ForThePatient.org — app.js v1.9.1 (Session BRAND-1 + hotfix — September 11 2026)
       RE-SKIN ONLY: icon markup + the JS-resolved color table + this block.
-      Pairs with index.html v6.0. No behavior, flow, RPC, data-path or layout
+      Pairs with index.html v6.0.1. No behavior, flow, RPC, data-path or layout
       change (byte-diff archived: BRAND-1_report.md §B). Changelog vs v1.8:
         ICONS (⧖D178): Font Awesome removed. Every <i class="fas fa-*"> becomes
               icon('name') — an inline <svg class="ic"> from the ICONS set
@@ -23,6 +23,13 @@
               which ⧖D173 retired — one flag red, severity by ring weight and
               word). sheetLinksHtml nav labels follow the header (How we score /
               Corrections; hrefs unchanged). No other string changed.
+        v1.9.1 HOTFIX (CARTO key, ⧖#51): since late August 2026 CARTO serves its
+              raster basemaps with an "API KEY REQUIRED" watermark unless the
+              request carries ?key=. CARTO_KEY (below) is appended to both tile
+              URLs by tileUrlFor(); the attribution now also credits
+              OpenStreetMap, which CARTO's basemap terms require. The key is
+              public by design (like the Supabase anon key, Inv #2) and is
+              restricted to forthepatient.org in the CARTO basemaps dashboard.
     ----------------------------------------------------------------------------
       ForThePatient.org — app.js v1.8 (Session FE-AUDIT-MOBILE — August 2026)
       Two small WIRING fixes found by the pre-promotion code audit. Pure frontend;
@@ -227,6 +234,11 @@
     const SUPABASE_URL='https://nhajnwffxlztmoadqcdl.supabase.co';
     const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5oYWpud2ZmeGx6dG1vYWRxY2RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTA1NzAsImV4cCI6MjA4ODMyNjU3MH0.lUVbH_ka0LS8B6xuQJG8KuOdwgk7lTejl9dPfzSUHwQ';
     const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+    // ── CARTO basemap key (v1.9.1). Free, 5M tiles/month; request at carto.com/basemaps/apikey.
+    // Public by design; restrict it to forthepatient.org in the CARTO dashboard. Empty string = watermarked tiles.
+    const CARTO_KEY='';
+    const TILE_ATTR='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a> &middot; CMS public data';
+    function tileUrlFor(theme){return'https://{s}.basemaps.cartocdn.com/'+(theme==='dark'?'dark_all':'light_all')+'/{z}/{x}/{y}{r}.png'+(CARTO_KEY?'?key='+encodeURIComponent(CARTO_KEY):'')}
     const STATE_ZOOM=7;
     const FACILITY_TYPES=[{value:'hospital',label:'Hospitals',icon:'hospital'},{value:'nursing_home',label:'Nursing Homes',icon:'house-plus'},{value:'dialysis',label:'Dialysis',icon:'droplet'},{value:'home_health',label:'Home Health',icon:'house-heart'},{value:'hospice',label:'Hospice',icon:'heart-hand'},{value:'irf',label:'Rehab (IRF)',icon:'walk'},{value:'ltch',label:'Long-Term (LTCH)',icon:'bed'}];
     const TYPE_LABEL=Object.fromEntries(FACILITY_TYPES.map(t=>[t.value,t.label]));
@@ -376,8 +388,7 @@
         // brand) and is preserved via the tileLayer attribution string.
         map=L.map('map',{center,zoom,zoomControl:false,attributionControl:false,preferCanvas:true});
         L.control.attribution({prefix:false}).addTo(map);
-        const tileUrl=currentTheme==='dark'?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png':'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-        L.tileLayer(tileUrl,{attribution:'&copy; CARTO &middot; CMS public data',subdomains:'abcd',maxZoom:20}).addTo(map);
+        L.tileLayer(tileUrlFor(currentTheme),{attribution:TILE_ATTR,subdomains:'abcd',maxZoom:20}).addTo(map);
         // CAP-VIZ (C3-NOCLUSTER): facilities are NEVER clustered. Every facility is
         // its own marker in this plain layer group, at every zoom — no pie charts.
         // (The markercluster library + CSS remain loaded so no dependency is removed,
@@ -1006,7 +1017,7 @@
 
     function wireResizeHandle(){const h=document.getElementById('resize-handle'),p=document.getElementById('info-panel');if(!h||!p)return;let sx,sw;function md(e){e.preventDefault();sx=e.clientX;sw=p.offsetWidth;document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu)}function mm(e){p.style.width=Math.max(320,Math.min(600,sw+(sx-e.clientX)))+'px'}function mu(){document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu)}h.addEventListener('mousedown',md)}
 
-    function toggleTheme(){currentTheme=currentTheme==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',currentTheme);try{localStorage.setItem('theme',currentTheme)}catch(e){}const btn=document.getElementById('theme-toggle-btn');btn.classList.toggle('active',currentTheme==='dark');btn.setAttribute('aria-checked',currentTheme==='dark');btn.querySelector('.toggle-slider').innerHTML=icon(currentTheme==='dark'?'moon':'sun');document.querySelector('meta[name="theme-color"]').content=currentTheme==='dark'?'#17122A':'#F6F5F1';map.eachLayer(l=>{if(l instanceof L.TileLayer)map.removeLayer(l)});L.tileLayer(currentTheme==='dark'?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png':'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; CARTO &middot; CMS public data',subdomains:'abcd',maxZoom:20}).addTo(map);if(currentViewMode==='facility'&&currentFacilities.length)renderMarkers(visibleFacilities());else if(currentViewMode==='state')renderStateBubbles();buildLegend();pushUrlState(true)}
+    function toggleTheme(){currentTheme=currentTheme==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',currentTheme);try{localStorage.setItem('theme',currentTheme)}catch(e){}const btn=document.getElementById('theme-toggle-btn');btn.classList.toggle('active',currentTheme==='dark');btn.setAttribute('aria-checked',currentTheme==='dark');btn.querySelector('.toggle-slider').innerHTML=icon(currentTheme==='dark'?'moon':'sun');document.querySelector('meta[name="theme-color"]').content=currentTheme==='dark'?'#17122A':'#F6F5F1';map.eachLayer(l=>{if(l instanceof L.TileLayer)map.removeLayer(l)});L.tileLayer(tileUrlFor(currentTheme),{attribution:TILE_ATTR,subdomains:'abcd',maxZoom:20}).addTo(map);if(currentViewMode==='facility'&&currentFacilities.length)renderMarkers(visibleFacilities());else if(currentViewMode==='state')renderStateBubbles();buildLegend();pushUrlState(true)}
 
     // ─── v5.0 mobile home sheet ──────────────────────────────────────────────
     function buildSheetChips(){
