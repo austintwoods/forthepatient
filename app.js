@@ -1,556 +1,1206 @@
-/*
-  ForThePatient.org — app.js v2.0 (POSTCARD-1, September 12, 2026)
-  ─────────────────────────────────────────────────────────────────────────
-  v2.0  POSTCARD-1: scroll-first rebuild (SCROLL-1 + SCROLL-2 in one pass,
-        in the Postcard design system).
-        - The FEED is the primary surface on every device: nearby_facilities
-          (Invariants #3–5: all params, !! coercion, p_limit 5000) fetched around
-          ONE origin (your location, a state centroid, or a deep-linked point),
-          distance-sorted client-side (haversineMiles), paged client-side.
-        - The MAP is a section: initialized lazily on first open (mobile) or at
-          load on desktop (≥960px). It renders the same rows as the feed as
-          L.divIcon markers (Invariants #7/#8/#31); marker click scrolls to the
-          card. CARTO + CMS attribution visible whenever the map is open (D152).
-        - The FACILITY REPORT is a scroll document rendered by buildReportHtml
-          from facility_detail (Invariant #6: no new RPCs, no new params).
-          Deep links ?fid= open it directly; history/popstate preserved.
-        - Sheet machinery deleted (setSheetView, syncSheetBarMetrics, the
-          data-sheet-* body attributes, D159 positioning): the surface it
-          served no longer exists, so its bug class (#24b/⧖#34) is gone.
-        - No inline on* handlers anywhere: every control is wired by delegated
-          listeners on data-* attributes, so the JS-string-context hazard that
-          jsq() guarded (FA-1) cannot recur. jsq() is retained for the record.
-        - ⧖#35 AbortController now passed to the RPC (.abortSignal); ⧖#36
-          clipboard guarded; ⧖#37 directions link omitted on null coords.
-        - Compare tray (session-only, max three) and a compare view.
-        - DATA_VINTAGE and STATUS_STRING are single tokens (J-ORG rule).
-        Carried verbatim in substance: escapeHtml (#15), DEBUG gate (#14),
-        theme (#12), geolocation timing (#11), buildPatientSummary (TRANSLATE-1),
-        buildEnforcementHtml (ENF-VIZ), buildPaymentPenaltyHtml (B-FLAG-SCOPE),
-        the capability model (CAP-VIZ), Decision 114's two severity vocabularies.
-        Not carried: state_summary bubbles (the feed replaces the national
-        view); the desktop side panel; markercluster (never instantiated since
-        C3-NOCLUSTER); Font Awesome (⧖D178).
-*/
-(function(){
-'use strict';
+/*  ============================================================================
+      ForThePatient.org — app.js v1.9.1 (Session BRAND-1 + hotfix — September 11 2026)
+      RE-SKIN ONLY: icon markup + the JS-resolved color table + this block.
+      Pairs with index.html v6.0.1. No behavior, flow, RPC, data-path or layout
+      change (byte-diff archived: BRAND-1_report.md §B). Changelog vs v1.8:
+        ICONS (⧖D178): Font Awesome removed. Every <i class="fas fa-*"> becomes
+              icon('name') — an inline <svg class="ic"> from the ICONS set
+              (original stroke geometry, shared with the static pages). The
+              .icon values in FACILITY_TYPES / SPECIALTIES / CAPABILITIES are
+              now ICONS keys. copyFacilityLink / toggleTheme / init swap the
+              svg markup instead of an <i> className. Harness asserts no
+              'fa-' class remains.
+        BANDS (⧖D173, Inv #8): CLASS_COLORS / scoreToClassColor / LEGEND_ITEMS
+              read the band set (light + dark variants; classColor() picks by
+              currentTheme so markers, pies, pills and the legend re-resolve on
+              toggle — FA-2's visibleFacilities() re-render already covers
+              markers; buildLegend() is now re-called in toggleTheme for the
+              legend). Text on any band is var(--band-text) (was #2C3E50 on
+              pastels). Unrated dots carry .unrated → outline-only (⧖Inv #46).
+              theme-color meta: #F6F5F1 / #17122A. The in-sheet legend line and
+              the map legend's ring line describe the NEW palette (the old
+              copy named green/red pastels and "darker red = more severe",
+              which ⧖D173 retired — one flag red, severity by ring weight and
+              word). sheetLinksHtml nav labels follow the header (How we score /
+              Corrections; hrefs unchanged). No other string changed.
+        v1.9.1 HOTFIX (CARTO key, ⧖#51): since late August 2026 CARTO serves its
+              raster basemaps with an "API KEY REQUIRED" watermark unless the
+              request carries ?key=. CARTO_KEY (below) is appended to both tile
+              URLs by tileUrlFor(); the attribution now also credits
+              OpenStreetMap, which CARTO's basemap terms require. The key is
+              public by design (like the Supabase anon key, Inv #2) and is
+              restricted to forthepatient.org in the CARTO basemaps dashboard.
+    ----------------------------------------------------------------------------
+      ForThePatient.org — app.js v1.8 (Session FE-AUDIT-MOBILE — August 2026)
+      Two small WIRING fixes found by the pre-promotion code audit. Pure frontend;
+      NO backend/RPC/param/schema change; NO new colors (#18); NO geometry change
+      (nothing here needs on-device pixel verification, but the founder's device
+      matrix should re-confirm Share + dark-mode-with-filter as part of the audit).
+      index.html stays at v5.11 BYTE-FOR-BYTE (verified by diff).
+      Changelog vs v1.7:
+        FA-1 (SHARE-APOSTROPHE): facility names containing an apostrophe
+              (ST MARY'S, CHILDREN'S…) broke the detail-card Share button: the
+              name was interpolated into an inline onclick via escapeHtml only,
+              and the HTML parser decodes &#39; back to a raw ' BEFORE compiling
+              the handler → JS syntax error, dead button, console error (violating
+              the no-console-noise gate). New jsq() pre-escapes \ and ' for the
+              JS-string context; applied to all three string args that enter
+              inline handlers (copy link id, share id+name, retry fid). Invariant
+              #15 (escapeHtml on all user-influenced HTML) still fully applies —
+              jsq runs FIRST, escapeHtml second.
+        FA-2 (THEME-FILTER): toggleTheme re-rendered markers from the RAW
+              currentFacilities instead of visibleFacilities(), so toggling dark
+              mode silently dropped the "Recent CMS enforcement" and client-side
+              capability filters from the MAP (list/stats stayed filtered —
+              an inconsistent surface). Now renders through visibleFacilities().
+      ----------------------------------------------------------------------------
+      ForThePatient.org — app.js v1.7 (Session ATTRIB-FIX-2 — July 2026)
+      Fixes the #24b on-device attribution regression together with index.html
+      v5.11. Pure frontend; NO backend/RPC/param/schema change; NO new colors
+      (#18); DESKTOP behavior unchanged (Invariant #29 — the new logic is
+      isMobile-guarded and only writes two <body> attributes + one CSS custom
+      property). Decision 152 stands (required attribution kept, never deleted).
+      Changelog vs v1.6:
+        ATTRIB-FIX-2: two small additions, no removals.
+          1. syncSheetBarMetrics(): measures the REAL rendered .sheet-bar height
+             (mobile only) and writes it to --sheet-bar-h, so the map attribution
+             clears the bar exactly in MAP view instead of relying on the v5.10
+             guessed 112px constant (which was smaller than the real bar and
+             clipped the tag). Called on load, on resize/orientationchange (via
+             the existing handleViewportResize), and after every setSheetView.
+          2. setSheetView / setSheetContent now MIRROR the mobile home view
+             (data-sheet-view = map|list) and content mode (data-sheet-mode =
+             home|detail) onto <body>, so index.html v5.11 can hide the map's
+             Leaflet attribution in CSS when the List/Detail sheet covers the map
+             (the Leaflet control is a sibling of #detail-sheet, so <body> is the
+             only shared ancestor; and Leaflet controls sit at z-index:1000, above
+             the z-800 sheet, so hiding — not z-order — is the correct fix).
+             handleViewportResize clears both <body> attributes on the desktop
+             branch so nothing leaks across the breakpoint.
+      ----------------------------------------------------------------------------
+      ForThePatient.org — app.js v1.6 (Session ATTRIB-FIX — June 2026)
+      Drops the non-required Leaflet "prefix" link from the map attribution
+      control while PRESERVING the required "© CARTO · CMS public data"
+      attribution (Known Issues #24 / Decision 152). Pairs with index.html v5.10.
+      Pure frontend; NO backend/RPC/param/schema change; NO new colors (#18);
+      DESKTOP behavior otherwise unchanged (Invariant #29).
+      Changelog vs v1.5:
+        ATTRIB-FIX: map is now created with attributionControl:false, then an
+              attribution control is re-added with {prefix:false}. This removes
+              only the "Leaflet" prefix link. The CARTO + CMS attribution is
+              carried on the tileLayer attribution string (both the initial layer
+              and the theme-toggle layer) and remains visible — it is contractually
+              required (CARTO basemap terms + the OpenStreetMap data beneath them)
+              and part of FTP's honest-sourcing brand, so it is NOT removed. The
+              CSS repositioning that lifts the control clear of the mobile
+              facility-type selector lives in index.html v5.10.
+      ----------------------------------------------------------------------------
+      ForThePatient.org — app.js v1.5 (Session B-FLAG-SCOPE — June 21 2026)
+      Detail-card-only surfacing of the demoted payment-penalty signal (S-20 /
+      Q-58 / Decision 148). Pairs with index.html v5.9. Pure frontend; consumes
+      the live contract read-only — NO new RPC, NO new RPC PARAM, NO schema change
+      (has_payment_penalty + payment_penalty_detail ride into the 'facility'
+      object via facility_detail's existing to_jsonb(f.*)). DESKTOP behavior
+      unchanged (Invariant #29); NO map/marker change; NO new colors (#18).
+      Changelog vs v1.4:
+        B-FLAG-SCOPE: new buildPaymentPenaltyHtml(f) renders a NEUTRAL, clearly
+              labeled "Medicare payment penalties" line on the detail card when
+              f.has_payment_penalty is true, reading f.payment_penalty_detail
+              (with a safe fallback). Wired into buildFacilityDetailHtml AFTER the
+              enforcement viz so the red active-enforcement banner (now SURVEY-only)
+              stays visually dominant and the payment line reads as informational,
+              not as a safety flag. All strings pass through escapeHtml (#15). The
+              marker/ring path is untouched: a payment-only hospital is simply not
+              has_active_enforcement, so it renders no red ring.
+      ----------------------------------------------------------------------------
+      ForThePatient.org — app.js v1.4 (Session GEO-DOT — June 2026)
+      Adds the visitor's "you are here" map marker + makes the MAP the default
+      mobile view on first open. Pairs with index.html v5.8. Pure frontend;
+      consumes the live contract read-only — NO new RPC, NO new RPC PARAM, NO
+      schema/scoring change. DESKTOP behavior unchanged (Invariant #29).
+      Changelog vs v1.3:
+        GEO-DOT: new userLocationLayer (created LAST in initMap so it sits above
+              the facility markers) + renderUserLocation(), which drops a slightly
+              larger pulsing blue L.divIcon (.ftp-geo-dot; Invariant #7 — divIcon,
+              never circleMarker) at userLocation. Idempotent (clears the prior dot
+              before re-adding); no-op if geolocation was denied. The literal blue
+              lives in CSS; JS only emits the class (Invariant #8/#18 pattern).
+        GEO-DEFAULT: the first-load geolocation success callback NO LONGER forces
+              setSheetView('list') on mobile. sheetView already defaults to 'map'
+              and the load handler already ends on setSheetView('map'), so the user
+              now lands on the MAP (centered on their metro, with the blue dot) and
+              can toggle to List with one tap. Nothing else about the list changed.
+      ─────────────────────────────────────────────────────────────────────────
+      ForThePatient.org — app.js v1.3 (Session MOBILE-CLEAN-1 — June 2026)
+      Mobile-only redesign of the bottom surface + initial-geolocation zoom fix.
+      Pure frontend; consumes the live B-ENF-FLAG contract read-only — NO new RPC,
+      NO new RPC PARAM, NO schema change. DESKTOP behavior is unchanged (Invariant
+      #29): all changes are inside isMobile-guarded paths or the mobile sheet model.
+      Changelog vs v1.2:
+        MC1-ZOOM: initMap's first-load geolocation now centers on the visitor's
+              METRO area (zoom 11) instead of the old regional zoom 6 that showed
+              several states (request #1). It also sets userLocation so the mobile
+              nearby list is distance-sorted from the very first render, and (on
+              mobile) opens the list so the visitor immediately sees nearby
+              facilities. A denied/failed lookup falls back to the prior behavior.
+        MC1-STATIC: The draggable peek/half/full "home sheet" is replaced by a
+              STATIC two-state model: setSheetView('map'|'list') toggles a
+              data-view/data-mode attribute on #detail-sheet; CSS does the rest.
+              Removed: getSnapHeights/applySheetHeight/setSheetSnap/
+              setupBottomSheetHandle (no more drag), wireSheetSearch/
+              renderSheetSearchResults (mobile search removed), wireNearMe/
+              startNearMe/showNearMePending + the near-me watch machinery (geo is
+              granted up front, so "Near me" is redundant — request #2), and the
+              mobile enforcement-toggle wiring. The desktop name search, the
+              desktop enforcement chip, and the desktop Capabilities dropdown are
+              all untouched.
+        MC1-EXIT: openFacilityDetail/closeFacilityInfo drive the detail overlay via
+              setSheetContent('detail'|'home'); the sticky Back/Close buttons are
+              wired in wireDetailBar(). Closing returns to whichever home view
+              (map|list) was active. A patient can never get stuck on a card
+              (request #3).
+        MC1-LIST: In Map view the list region is collapsed by CSS so it can never
+              peek through (request #4); renderSheetList only paints when the list
+              is actually visible.
+        ── carried from v1.2 (CAP-VIZ) ──
+      ForThePatient.org — app.js v1.2 (Session CAP-VIZ — June 2026)
+      Capability filter + de-clustered markers + red enforcement-severity gradient
+      + component-weight removal + map legend. Pure frontend; consumes the live
+      B-ENF-FLAG contract read-only — NO new RPC, NO new RPC PARAM, NO schema
+      change. Closes the last product-track polish items requested by the founder.
+      Changelog vs v1.1:
+        C1-RING: Enforcement marker RING is now a graduated RED scale, so MINOR →
+              CRITICAL reads as light-red → deep-red at a glance (CSS in index.html;
+              JS still resolves the sev-WORD class from the 4-tier
+              enforcement_severity). MINOR no longer renders gray. Drives a parallel
+              red gradient on the detail-card banner left edge + the mobile FLAGGED
+              pill. The literal hexes live in CSS; JS only sets the sev-<word> class.
+        C2-CAP: NEW "Capabilities" filter in the desktop filter bar AND the mobile
+              home sheet — a single dropdown/panel letting a patient require
+              facilities that have what their condition needs (NICU, ER, Cardiac
+              Cath, Trauma, Teaching — the five live nearby_facilities server params
+              — PLUS, applied CLIENT-SIDE over already-fetched rows when the field is
+              present, Cardiac Surgery, MRI, Burn Unit, Transplant, and a
+              higher-complexity CMI cut). activeSpecialties now also carries the
+              client-side keys; capabilityClientFilter() degrades gracefully (only
+              filters on a field that actually appears in the returned rows, so it
+              can never blank the map on a column the RPC didn't return). No new RPC
+              param (Invariant #6): the five booleans reuse the existing params; the
+              rest filter rows we already have (re-affirms Decision 132b).
+        C3-NOCLUSTER: ALL pie-chart clustering is eliminated at EVERY zoom. Every
+              individual facility now renders as its own .ftp-dot (with its
+              enforcement ring) in the un-clustered facilityLayer — never a cluster
+              pie — in the ordinary facility view as well as the state drill-down.
+              The ONLY clusters that remain are the national state bubbles
+              (zoom < 7), which are unchanged. The markercluster dependency and its
+              CSS are retained but no longer instantiated (no dep removed → Invariant
+              #17 intact; the cluster icon builder is dead-coded but kept for the
+              record). Supersedes Invariants #9/#10 (cluster tuning) — see headers.
+        C4-NOWEIGHT: The detail-card "Component breakdown" no longer prints the
+              per-component weight percentage. Each row shows the component name and
+              its 1–10 score only; the bar still encodes the score. The .section-note
+              copy drops the "percentage is how much it counts" clause.
+        C5-LEGEND: A small, always-on rating-color legend sits at the top-left of the
+              map, directly below the search/filter bar (desktop), and as a compact
+              strip in the mobile home sheet. Reads the documented classification
+              palette only — no new colors.
+        ── carried from v1.1 (TRANSLATE-1) ──
+        T1-1: buildPatientSummary(f,hist) — a calm, second-person reading rendered
+              at the TOP of the card body (primary path; persona-1 wins), fed by
+              the shared buildFacilityDetailHtml so it appears in BOTH the desktop
+              side panel and the mobile sheet (Invariants #29/#30). Order: (1) the
+              enforcement flag — the "is anything wrong here" answer — then (2) the
+              quality reading (score + classification + state percentile), then
+              (3) proximity (reuses the existing geolocation + haversineMiles; no
+              new math). Coherent for the flagged-but-scores-well case (Q-15): the
+              flag leads, then "Setting the enforcement flag aside, its … score is".
+        T1-2: Percentile phrasing (Q-40) = "better than about X% of <State> <peers>"
+              + a directional cue (near the bottom / around the middle / near the
+              top). This is the literal percentile definition and never inverts.
+              pctWhole() rounds half-up and clamps 1..99 (never "0%"/"100%").
+        T1-3: NULL state_percentile (Q-40) split into two honest, never-blank cases:
+              Unrated (no score at all → "not enough public data to rate") vs a
+              scored facility with too few in-state same-type peers to rank. Never
+              prints "0th percentile", "null", or a blank.
+        T1-4: Glossary-in-context (not a separate page): the score line now reads
+              "1 (weakest) to 10 (strongest)" and a one-line .section-note under
+              "Component breakdown" explains the weighting in plain words.
+        T1-5: All facility-derived strings routed through escapeHtml (#15). No new
+              deps (#17). New colors: none beyond the existing #C0392B tint and one
+              darker shade of the documented --cls-excep green (#5FA85F), confined
+              to a 4px accent bar — same treatment Invariant #18 already grants the
+              banner-icon tints. No build step; two static files (#16).
+    */
+    const SUPABASE_URL='https://nhajnwffxlztmoadqcdl.supabase.co';
+    const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5oYWpud2ZmeGx6dG1vYWRxY2RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTA1NzAsImV4cCI6MjA4ODMyNjU3MH0.lUVbH_ka0LS8B6xuQJG8KuOdwgk7lTejl9dPfzSUHwQ';
+    const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+    // ── CARTO basemap key (v1.9.1). Free, 5M tiles/month; request at carto.com/basemaps/apikey.
+    // Public by design; restrict it to forthepatient.org in the CARTO dashboard. Empty string = watermarked tiles.
+    const CARTO_KEY='cb1_3ii1_1_c246709e7bcf48e0ba0acce9';
+    const TILE_ATTR='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a> &middot; CMS public data';
+    function tileUrlFor(theme){return'https://{s}.basemaps.cartocdn.com/'+(theme==='dark'?'dark_all':'light_all')+'/{z}/{x}/{y}{r}.png'+(CARTO_KEY?'?key='+encodeURIComponent(CARTO_KEY):'')}
+    const STATE_ZOOM=7;
+    const FACILITY_TYPES=[{value:'hospital',label:'Hospitals',icon:'hospital'},{value:'nursing_home',label:'Nursing Homes',icon:'house-plus'},{value:'dialysis',label:'Dialysis',icon:'droplet'},{value:'home_health',label:'Home Health',icon:'house-heart'},{value:'hospice',label:'Hospice',icon:'heart-hand'},{value:'irf',label:'Rehab (IRF)',icon:'walk'},{value:'ltch',label:'Long-Term (LTCH)',icon:'bed'}];
+    const TYPE_LABEL=Object.fromEntries(FACILITY_TYPES.map(t=>[t.value,t.label]));
+    const SPECIALTIES=[{key:'er',label:'ER',icon:'ambulance'},{key:'nicu',label:'NICU',icon:'baby'},{key:'trauma',label:'Trauma',icon:'kit'},{key:'teaching',label:'Teaching',icon:'cap'},{key:'cath',label:'Cardiac Cath',icon:'heart-pulse'}];
+    // ── CAP-VIZ: the "Capabilities" filter model ───────────────────────────────
+    // Two kinds of capability. SERVER keys map to the five live nearby_facilities
+    // boolean params (no new RPC param — Invariant #6). CLIENT keys filter the rows
+    // we already fetched (Decision 132b); each names the facility field to test and
+    // is only ever applied when that field is actually present on returned rows, so
+    // a missing column can never blank the map. CMI is a numeric "higher-complexity"
+    // cut rather than a boolean. `field` is read from a nearby_facilities row.
+    const CAPABILITIES=[
+        {key:'er',       label:'Emergency room',   icon:'ambulance',          kind:'server', hint:'Has an emergency department'},
+        {key:'nicu',     label:'NICU',             icon:'baby',                   kind:'server', hint:'Newborn intensive care'},
+        {key:'cath',     label:'Cardiac cath lab', icon:'heart-pulse',            kind:'server', hint:'Cardiac catheterization'},
+        {key:'trauma',   label:'Trauma center',    icon:'kit',            kind:'server', hint:'Designated trauma center'},
+        {key:'teaching', label:'Teaching hospital',icon:'cap',         kind:'server', hint:'Academic / teaching status'},
+        {key:'cardsurg', label:'Cardiac surgery',  icon:'heart-bolt',      kind:'client', field:'has_cardiac_surgery', hint:'Open-heart / cardiac surgery'},
+        {key:'mri',      label:'MRI on site',      icon:'magnet',                 kind:'client', field:'has_mri',            hint:'On-site MRI imaging'},
+        {key:'burn',     label:'Burn unit',        icon:'flame',                   kind:'client', field:'has_burn_unit',      hint:'Specialized burn care'},
+        {key:'transplant',label:'Transplant',      icon:'hand-medical',   kind:'client', field:'has_organ_transplant',hint:'Organ transplant program'},
+        {key:'highcmi',  label:'Higher complexity',icon:'layers',            kind:'client', field:'case_mix_index', cmiMin:1.75, hint:'Case-mix index ≥ 1.75 (sicker, more complex caseload)'}
+    ];
+    const CAP_SERVER_KEYS=CAPABILITIES.filter(c=>c.kind==='server').map(c=>c.key);
+    const CAP_CLIENT=CAPABILITIES.filter(c=>c.kind==='client');
+    // BRAND-1 (⧖D173): the band set, JS-resolved (Inv #8), light + dark variants.
+    const CLASS_COLORS={'Exceptional':'#1F6E4E','Above Average':'#2F7D50','Average':'#615C6E','Below Average':'#B85C13','Poor':'#8F2A22','Unrated':'#8B8794'};
+    const CLASS_COLORS_DARK={'Exceptional':'#33A176','Above Average':'#3E9963','Average':'#8C86A0','Below Average':'#D27A2E','Poor':'#D25A4E','Unrated':'#8B8794'};
+    const CLASS_ORDER=['Exceptional','Above Average','Average','Below Average','Poor','Unrated'];
+    // ── BRAND-1 (⧖D178): the inline icon set. One source, shared with the static
+    // pages (tools/icons.py emits both). 1em square, currentColor stroke.
+    const ICONS={
+        'search':'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/>',
+        'pin':'<path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2.5"/>',
+        'crosshair':'<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+        'flag':'<path d="M5 21V4"/><path d="M5 4h12l-2.5 4L17 12H5"/>',
+        'chevron-down':'<path d="M6 9l6 6 6-6"/>',
+        'chevron-right':'<path d="M9 6l6 6-6 6"/>',
+        'back':'<path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/>',
+        'share':'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>',
+        'link':'<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.5 1.5"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5"/>',
+        'check':'<path d="M5 12.5l4.5 4.5L19 7"/>',
+        'close':'<path d="M6 6l12 12M18 6L6 18"/>',
+        'tack':'<path d="M9 3h6v6l3 3H6l3-3z"/><path d="M12 12v9"/>',
+        'sun':'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+        'moon':'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+        'map':'<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>',
+        'list':'<path d="M8 6h13M8 12h13M8 18h13"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+        'checklist':'<path d="M3 6l2 2 4-4M3 14l2 2 4-4M13 7h8M13 15h8"/>',
+        'filter':'<path d="M3 5h18l-7 8v6l-4 2v-8z"/>',
+        'info':'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+        'history':'<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>',
+        'payment':'<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 12h6M9 16h6"/>',
+        'star':'<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/>',
+        'phone':'<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+        'wifi':'<path d="M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0"/><path d="M12 19.5h.01"/>',
+        'spinner':'<path d="M12 3a9 9 0 1 0 9 9"/>',
+        'alert':'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',
+        'hospital':'<path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16"/><path d="M2 21h20"/><path d="M12 7v6M9 10h6"/><path d="M9 21v-4h6v4"/>',
+        'house-plus':'<path d="M3 11l9-7 9 7"/><path d="M5 10v11h14V10"/><path d="M12 13v5M9.5 15.5h5"/>',
+        'droplet':'<path d="M12 3s-6 6.5-6 11a6 6 0 0 0 12 0c0-4.5-6-11-6-11z"/>',
+        'house-heart':'<path d="M3 11l9-7 9 7"/><path d="M5 10v11h14V10"/><path d="M12 18s-3.2-2-3.2-4a1.7 1.7 0 0 1 3.2-.8 1.7 1.7 0 0 1 3.2.8c0 2-3.2 4-3.2 4z"/>',
+        'heart-hand':'<path d="M4 14h3.5l3.5 2h4a1.5 1.5 0 0 1 0 3H9"/><path d="M4 14v7"/><path d="M15 19l5-1.5a1.5 1.5 0 0 0-1-2.8L13 16"/><path d="M14 11s-3-2-3-4a1.6 1.6 0 0 1 3-.7 1.6 1.6 0 0 1 3 .7c0 2-3 4-3 4z"/>',
+        'walk':'<circle cx="13" cy="4.5" r="1.7"/><path d="M10 21l2-6 3 2 1 4"/><path d="M12 15l-1-5 3-1 2 3 3 1"/><path d="M11 10l-3 1-1 4"/>',
+        'bed':'<path d="M3 19V8"/><path d="M3 13h18v6"/><path d="M3 17h18"/><circle cx="7" cy="10" r="2"/><path d="M11 13v-3h7a3 3 0 0 1 3 3"/>',
+        'ambulance':'<path d="M3 7h10v10H3z"/><path d="M13 10h4l3 3v4h-7"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/><path d="M8 10v4M6 12h4"/>',
+        'baby':'<circle cx="12" cy="9" r="4"/><path d="M6 21a6 6 0 0 1 12 0"/><path d="M10.5 9h.01M13.5 9h.01"/><path d="M12 5c0-1.2 1-1.8 2-1.3"/>',
+        'kit':'<path d="M3 8h18v12H3z"/><path d="M9 8V5h6v3"/><path d="M12 11v6M9 14h6"/>',
+        'cap':'<path d="M2 9l10-4 10 4-10 4z"/><path d="M6 11v5c0 1.5 3 3 6 3s6-1.5 6-3v-5"/><path d="M22 9v6"/>',
+        'heart-pulse':'<path d="M12 20s-8-5-8-11a4 4 0 0 1 8-1.5A4 4 0 0 1 20 9c0 6-8 11-8 11z"/><path d="M4 11h4l1.5-3 2 6 1.5-3h7"/>',
+        'heart-bolt':'<path d="M12 20s-8-5-8-11a4 4 0 0 1 8-1.5A4 4 0 0 1 20 9c0 6-8 11-8 11z"/><path d="M13 7l-3 5h4l-3 5"/>',
+        'magnet':'<path d="M6 3v8a6 6 0 0 0 12 0V3"/><path d="M6 3h4v8a2 2 0 0 0 4 0V3h4"/><path d="M6 7h4M14 7h4"/>',
+        'flame':'<path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1.5 3 2 3 .5-2 0-5 1-8.5z"/>',
+        'hand-medical':'<path d="M4 14h3.5l3.5 2h4a1.5 1.5 0 0 1 0 3H9"/><path d="M4 14v7"/><path d="M15 19l5-1.5a1.5 1.5 0 0 0-1-2.8L13 16"/><path d="M13 3v6M10 6h6"/>',
+        'layers':'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17l9 5 9-5"/>',
+        'ban':'<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+        'document':'<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 11h6M9 15h6M9 19h3"/>',
+        'lock-open':'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/>',
+        'chart':'<path d="M3 20h18"/><path d="M4 16l5-6 4 3 7-8"/>',
+        'language':'<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>'
+    };
+    function icon(n,cls){return'<svg class="ic'+(cls?' '+cls:'')+'" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'+(ICONS[n]||'')+'</svg>'}
+    const US_STATES=[{n:'Alabama',s:'AL',lat:32.806671,lng:-86.79113},{n:'Alaska',s:'AK',lat:61.370716,lng:-152.404419},{n:'Arizona',s:'AZ',lat:33.729759,lng:-111.431221},{n:'Arkansas',s:'AR',lat:34.969704,lng:-92.373123},{n:'California',s:'CA',lat:36.116203,lng:-119.681564},{n:'Colorado',s:'CO',lat:39.059811,lng:-105.311104},{n:'Connecticut',s:'CT',lat:41.597782,lng:-72.755371},{n:'Delaware',s:'DE',lat:39.318523,lng:-75.507141},{n:'Florida',s:'FL',lat:27.766279,lng:-81.686783},{n:'Georgia',s:'GA',lat:33.040619,lng:-83.643074},{n:'Hawaii',s:'HI',lat:21.094318,lng:-157.498337},{n:'Idaho',s:'ID',lat:44.240459,lng:-114.478773},{n:'Illinois',s:'IL',lat:40.349457,lng:-88.986137},{n:'Indiana',s:'IN',lat:39.849426,lng:-86.258278},{n:'Iowa',s:'IA',lat:42.011539,lng:-93.210526},{n:'Kansas',s:'KS',lat:38.5266,lng:-96.726486},{n:'Kentucky',s:'KY',lat:37.66814,lng:-84.670067},{n:'Louisiana',s:'LA',lat:31.169546,lng:-91.867805},{n:'Maine',s:'ME',lat:44.693947,lng:-69.381927},{n:'Maryland',s:'MD',lat:39.063946,lng:-76.802101},{n:'Massachusetts',s:'MA',lat:42.230171,lng:-71.530106},{n:'Michigan',s:'MI',lat:43.326618,lng:-84.536095},{n:'Minnesota',s:'MN',lat:45.694454,lng:-93.900192},{n:'Mississippi',s:'MS',lat:32.741646,lng:-89.678696},{n:'Missouri',s:'MO',lat:38.456085,lng:-92.288368},{n:'Montana',s:'MT',lat:46.921925,lng:-110.454353},{n:'Nebraska',s:'NE',lat:41.12537,lng:-98.268082},{n:'Nevada',s:'NV',lat:38.313515,lng:-117.055374},{n:'New Hampshire',s:'NH',lat:43.452492,lng:-71.563896},{n:'New Jersey',s:'NJ',lat:40.298904,lng:-74.521011},{n:'New Mexico',s:'NM',lat:34.840515,lng:-106.248482},{n:'New York',s:'NY',lat:42.165726,lng:-74.948051},{n:'North Carolina',s:'NC',lat:35.630066,lng:-79.806419},{n:'North Dakota',s:'ND',lat:47.528912,lng:-99.784012},{n:'Ohio',s:'OH',lat:40.388783,lng:-82.764915},{n:'Oklahoma',s:'OK',lat:35.565342,lng:-96.928917},{n:'Oregon',s:'OR',lat:44.572021,lng:-122.070938},{n:'Pennsylvania',s:'PA',lat:40.590752,lng:-77.209755},{n:'Rhode Island',s:'RI',lat:41.680893,lng:-71.51178},{n:'South Carolina',s:'SC',lat:33.856892,lng:-80.945007},{n:'South Dakota',s:'SD',lat:44.299782,lng:-99.438828},{n:'Tennessee',s:'TN',lat:35.747845,lng:-86.692345},{n:'Texas',s:'TX',lat:31.054487,lng:-97.563461},{n:'Utah',s:'UT',lat:40.150032,lng:-111.862434},{n:'Vermont',s:'VT',lat:44.045876,lng:-72.710686},{n:'Virginia',s:'VA',lat:37.769337,lng:-78.169968},{n:'Washington',s:'WA',lat:47.400902,lng:-121.490494},{n:'West Virginia',s:'WV',lat:38.491226,lng:-80.954456},{n:'Wisconsin',s:'WI',lat:44.268543,lng:-89.616508},{n:'Wyoming',s:'WY',lat:42.755966,lng:-107.30249},{n:'District of Columbia',s:'DC',lat:38.897438,lng:-77.026817},{n:'Puerto Rico',s:'PR',lat:18.220833,lng:-66.590149},{n:'Guam',s:'GU',lat:13.444304,lng:144.793731},{n:'U.S. Virgin Islands',s:'VI',lat:18.335765,lng:-64.896335}];
+    const STATE_BY_ABBR=Object.fromEntries(US_STATES.map(s=>[s.s,s]));
 
-// ── Single-token public facts (edit here only) ──────────────────────────────
-const DATA_VINTAGE='June 2026';                       // refreshed with every seed
-const STATUS_STRING='ForThePatient.org is a nonprofit initiative; 501(c)(3) formation is underway.'; // Q-63 (D156)
-const SITE_URL='https://forthepatient.org/';
+    // Debug logging gate: only console.log in localhost or with ?debug=1
+    const DEBUG=(function(){try{return(new URLSearchParams(location.search).get('debug')==='1')||location.hostname==='localhost'||location.hostname==='127.0.0.1'}catch(e){return false}})();
+    const dlog=DEBUG?console.log.bind(console,'[FTP]'):function(){};
+    const derr=DEBUG?console.error.bind(console,'[FTP]'):function(){};
 
-// ── Backend (Invariants #1, #2) ─────────────────────────────────────────────
-const SUPABASE_URL='https://nhajnwffxlztmoadqcdl.supabase.co';
-const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5oYWpud2ZmeGx6dG1vYWRxY2RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTA1NzAsImV4cCI6MjA4ODMyNjU3MH0.lUVbH_ka0LS8B6xuQJG8KuOdwgk7lTejl9dPfzSUHwQ';
-const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+    let map,facilityLayer,stateBubbleLayer,stateFacilityLayer,userLocationLayer;
+    let currentTheme='light',currentFacilities=[],openFacilityId=null;
+    let activeTypes=new Set(['hospital']);
+    let activeSpecialties={teaching:false,nicu:false,cath:false,trauma:false,er:false,cardsurg:false,mri:false,burn:false,transplant:false,highcmi:false};
+    // ENF-VIZ-2: "Recent CMS Enforcement" filter. When on, only facilities with
+    // a current, unresolved CMS survey finding (has_active_enforcement) are shown.
+    // Client-side over rows already returned by nearby_facilities — no RPC change.
+    let enforcementOnly=false;
+    let isMobile=false,isOnline=navigator.onLine,isTouching=false,pendingFetch=false,detailPanelPinned=false,inflightController=null;
+    let stateSummaryCache=null,currentViewMode='state';
+    // MOBILE-CLEAN-1 (v5.6): the mobile surface is a STATIC bar with two home
+    // states (map|list) plus a detail overlay — not a draggable peek/half/full
+    // sheet. sheetView holds the current home state; sheetMode is home|detail.
+    let sheetMode='home',sheetView='map',userLocation=null;
+    let filteredState=null;
 
-// ── Vocabulary ──────────────────────────────────────────────────────────────
-const FACILITY_TYPES=[{value:'hospital',label:'Hospitals',one:'hospital'},{value:'nursing_home',label:'Nursing homes',one:'nursing home'},{value:'dialysis',label:'Dialysis',one:'dialysis center'},{value:'home_health',label:'Home health',one:'home health agency'},{value:'hospice',label:'Hospice',one:'hospice'},{value:'irf',label:'Rehab (IRF)',one:'rehab facility'},{value:'ltch',label:'Long-term (LTCH)',one:'long-term care hospital'}];
-const TYPE_LABEL=Object.fromEntries(FACILITY_TYPES.map(t=>[t.value,t.label]));
-const TYPE_ONE=Object.fromEntries(FACILITY_TYPES.map(t=>[t.value,t.one]));
-// Journeys are PRESETS of FACILITY_TYPES[].value keys (⧖D175). They never change a verdict.
-const JOURNEYS=[
-  {key:'me',label:'For me',types:['hospital'],title:'Hospitals'},
-  {key:'parent',label:'For my parent',types:['nursing_home','home_health','hospice'],title:'Nursing homes, home health and hospice'},
-  {key:'after',label:'After a hospital stay',types:['irf','ltch','home_health'],title:'Rehab, long-term care and home health'}
-];
-// CAP-VIZ model, carried. Server keys map to the five live nearby_facilities booleans
-// (no new RPC param — Invariant #6); client keys filter rows already in hand.
-const CAPABILITIES=[
-  {key:'er',label:'Emergency room',kind:'server'},{key:'nicu',label:'NICU',kind:'server'},{key:'cath',label:'Cardiac cath lab',kind:'server'},
-  {key:'trauma',label:'Trauma center',kind:'server'},{key:'teaching',label:'Teaching hospital',kind:'server'},
-  {key:'cardsurg',label:'Cardiac surgery',kind:'client',field:'has_cardiac_surgery'},{key:'mri',label:'MRI on site',kind:'client',field:'has_mri'},
-  {key:'burn',label:'Burn unit',kind:'client',field:'has_burn_unit'},{key:'transplant',label:'Transplant',kind:'client',field:'has_organ_transplant'},
-  {key:'highcmi',label:'Higher complexity',kind:'client',field:'case_mix_index',cmiMin:1.75}
-];
-const CAP_SERVER_KEYS=CAPABILITIES.filter(c=>c.kind==='server').map(c=>c.key);
-const CAP_CLIENT=CAPABILITIES.filter(c=>c.kind==='client');
-// The band is the ONLY color carrier and it always travels with its word + number (⧖Inv #46).
-const BAND={'Exceptional':'exceptional','Above Average':'above','Average':'average','Below Average':'below','Poor':'poor','Unrated':'unrated'};
-const BAND_WORD={'Exceptional':'Exceptional','Above Average':'Above average','Average':'Average','Below Average':'Below average','Poor':'Poor','Unrated':'Not scored'};
-const BAND_HEX={exceptional:'#1F6E4E',above:'#2F7D50',average:'#5F6B78',below:'#B85C13',poor:'#8F2A22',unrated:'#8B8794'};
-// One short verdict sentence per label — the card's second line; the report carries the full reading.
-const VERDICT={'Exceptional':'Among the strongest of its type. A confident choice.','Above Average':'Better than most nearby. Worth a visit.','Average':'Typical for its type. Ask about the parts that matter to you.','Below Average':'Weaker than most. Look at other options first.','Poor':'Serious concerns. We would look elsewhere.','Unrated':'Not enough public data to score it. That is not a bad sign — ask the facility directly.'};
-const SEV_RANK={CRITICAL:4,SEVERE:3,MODERATE:2,MINOR:1};
-const SEV_WORD={CRITICAL:'critical',SEVERE:'severe',MODERATE:'moderate',MINOR:'minor'};
-const LVL_WORD={immediate_jeopardy:'critical',condition:'significant',standard:'minor',critical:'critical',significant:'significant',minor:'minor'};
-const RADII=[10,25,50,100];
-const PAGE=20;
-const US_STATES=[{n:'Alabama',s:'AL',lat:32.806671,lng:-86.79113},{n:'Alaska',s:'AK',lat:61.370716,lng:-152.404419},{n:'Arizona',s:'AZ',lat:33.729759,lng:-111.431221},{n:'Arkansas',s:'AR',lat:34.969704,lng:-92.373123},{n:'California',s:'CA',lat:36.116203,lng:-119.681564},{n:'Colorado',s:'CO',lat:39.059811,lng:-105.311104},{n:'Connecticut',s:'CT',lat:41.597782,lng:-72.755371},{n:'Delaware',s:'DE',lat:39.318523,lng:-75.507141},{n:'Florida',s:'FL',lat:27.766279,lng:-81.686783},{n:'Georgia',s:'GA',lat:33.040619,lng:-83.643074},{n:'Hawaii',s:'HI',lat:21.094318,lng:-157.498337},{n:'Idaho',s:'ID',lat:44.240459,lng:-114.478773},{n:'Illinois',s:'IL',lat:40.349457,lng:-88.986137},{n:'Indiana',s:'IN',lat:39.849426,lng:-86.258278},{n:'Iowa',s:'IA',lat:42.011539,lng:-93.210526},{n:'Kansas',s:'KS',lat:38.5266,lng:-96.726486},{n:'Kentucky',s:'KY',lat:37.66814,lng:-84.670067},{n:'Louisiana',s:'LA',lat:31.169546,lng:-91.867805},{n:'Maine',s:'ME',lat:44.693947,lng:-69.381927},{n:'Maryland',s:'MD',lat:39.063946,lng:-76.802101},{n:'Massachusetts',s:'MA',lat:42.230171,lng:-71.530106},{n:'Michigan',s:'MI',lat:43.326618,lng:-84.536095},{n:'Minnesota',s:'MN',lat:45.694454,lng:-93.900192},{n:'Mississippi',s:'MS',lat:32.741646,lng:-89.678696},{n:'Missouri',s:'MO',lat:38.456085,lng:-92.288368},{n:'Montana',s:'MT',lat:46.921925,lng:-110.454353},{n:'Nebraska',s:'NE',lat:41.12537,lng:-98.268082},{n:'Nevada',s:'NV',lat:38.313515,lng:-117.055374},{n:'New Hampshire',s:'NH',lat:43.452492,lng:-71.563896},{n:'New Jersey',s:'NJ',lat:40.298904,lng:-74.521011},{n:'New Mexico',s:'NM',lat:34.840515,lng:-106.248482},{n:'New York',s:'NY',lat:42.165726,lng:-74.948051},{n:'North Carolina',s:'NC',lat:35.630066,lng:-79.806419},{n:'North Dakota',s:'ND',lat:47.528912,lng:-99.784012},{n:'Ohio',s:'OH',lat:40.388783,lng:-82.764915},{n:'Oklahoma',s:'OK',lat:35.565342,lng:-96.928917},{n:'Oregon',s:'OR',lat:44.572021,lng:-122.070938},{n:'Pennsylvania',s:'PA',lat:40.590752,lng:-77.209755},{n:'Rhode Island',s:'RI',lat:41.680893,lng:-71.51178},{n:'South Carolina',s:'SC',lat:33.856892,lng:-80.945007},{n:'South Dakota',s:'SD',lat:44.299782,lng:-99.438828},{n:'Tennessee',s:'TN',lat:35.747845,lng:-86.692345},{n:'Texas',s:'TX',lat:31.054487,lng:-97.563461},{n:'Utah',s:'UT',lat:40.150032,lng:-111.862434},{n:'Vermont',s:'VT',lat:44.045876,lng:-72.710686},{n:'Virginia',s:'VA',lat:37.769337,lng:-78.169968},{n:'Washington',s:'WA',lat:47.400902,lng:-121.490494},{n:'West Virginia',s:'WV',lat:38.491226,lng:-80.954456},{n:'Wisconsin',s:'WI',lat:44.268543,lng:-89.616508},{n:'Wyoming',s:'WY',lat:42.755966,lng:-107.30249},{n:'District of Columbia',s:'DC',lat:38.897438,lng:-77.026817},{n:'Puerto Rico',s:'PR',lat:18.220833,lng:-66.590149},{n:'Guam',s:'GU',lat:13.444304,lng:144.793731},{n:'U.S. Virgin Islands',s:'VI',lat:18.335765,lng:-64.896335}];
-const STATE_BY_ABBR=Object.fromEntries(US_STATES.map(s=>[s.s,s]));
+    function classColor(c){const t=currentTheme==='dark'?CLASS_COLORS_DARK:CLASS_COLORS;return t[c]||t.Unrated}
+    function classBadgeClass(c){return(!c||c==='Unrated')?'unrated':''}
+    // ── ENF-VIZ: enforcement severity (facility-level 4-tier) ───────────────
+    // {CRITICAL,SEVERE,MODERATE,MINOR}. Drives the marker ring + flag pill.
+    const SEV_RANK={CRITICAL:4,SEVERE:3,MODERATE:2,MINOR:1};
+    const SEV_WORD={CRITICAL:'critical',SEVERE:'severe',MODERATE:'moderate',MINOR:'minor'};
+    function normSev(s){if(s==null)return null;const u=String(s).trim().toUpperCase();return SEV_RANK[u]?u:null}
+    // Per-survey level (3-tier {critical,significant,minor}, Decision 114).
+    const LVL_WORD={immediate_jeopardy:'critical',condition:'significant',standard:'minor',critical:'critical',significant:'significant',minor:'minor'};
+    function debounce(fn,ms){let t;return function(...a){clearTimeout(t);t=setTimeout(()=>fn.apply(this,a),ms)}}
+    function truthy(v){if(v===true)return true;if(v===false||v==null)return false;const s=String(v).toLowerCase();return s==='y'||s==='yes'||s==='true'||s==='1'}
+    function escapeHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+    // FE-AUDIT-MOBILE (v1.8): pre-escape for the JS-STRING context inside inline
+    // onclick attributes. escapeHtml alone is NOT sufficient there: the HTML parser
+    // decodes &#39; back to a raw ' before the handler is compiled, so a facility
+    // name containing an apostrophe (ST MARY'S, CHILDREN'S…) produced a JS syntax
+    // error and a dead Share button. jsq() backslash-escapes \ and ' FIRST; the
+    // result then goes through escapeHtml as before (Invariant #15 still holds).
+    function jsq(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
+    function scoreToBarColor(s){if(s==null)return'var(--border)';if(s>=7.5)return'#A0D8A0';if(s>=6)return'#B8E6A0';if(s>=4.5)return'#F8D08A';if(s>=3)return'#F0B8A0';return'#E8A0A0'}
+    function scoreToClassColor(s){return classColor(s==null?'Unrated':s>=7.5?'Exceptional':s>=6?'Above Average':s>=4.5?'Average':s>=3?'Below Average':'Poor')}
+    function haptic(ms){if(isMobile&&navigator.vibrate)try{navigator.vibrate(ms||10)}catch(e){}}
+    function checkMobile(){isMobile=window.innerWidth<=768}
+    function haversineMiles(lat1,lng1,lat2,lng2){const R=3958.8,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(a))}
+    function originForDistance(){if(userLocation)return userLocation;if(map){const c=map.getCenter();return{lat:c.lat,lng:c.lng}}return null}
+    function activeTypeNoun(){if(activeTypes.size===1){const v=Array.from(activeTypes)[0];return(TYPE_LABEL[v]||'facilities').toLowerCase()}return'facilities'}
 
-// ── Debug gate (Invariant #14) ──────────────────────────────────────────────
-const DEBUG=(function(){try{return(new URLSearchParams(location.search).get('debug')==='1')||location.hostname==='localhost'||location.hostname==='127.0.0.1'}catch(e){return false}})();
-const dlog=DEBUG?console.log.bind(console,'[FTP]'):function(){};
-const derr=DEBUG?console.error.bind(console,'[FTP]'):function(){};
+    function getViewportRadiusMiles(){if(!map)return 25;const b=map.getBounds(),d=map.distance(b.getNorthEast(),b.getSouthWest());const h=(d/1609.344)/2;return Math.max(2,Math.min(2000,Math.ceil(h)))}
 
-// ── State ───────────────────────────────────────────────────────────────────
-let currentTheme='light';
-let activeTypes=new Set(['hospital']);
-let journey='me';
-let radius=25;
-let origin=null;                 // {lat,lng,kind:'geo'|'state'|'url',state?}
-let currentFacilities=[];        // rows from the last nearby_facilities call, with _dist
-let shownCount=PAGE;
-let flagOnly=false;
-let activeCaps=Object.fromEntries(CAPABILITIES.map(c=>[c.key,false]));
-let compare=[];                  // up to 3 facility rows (session-only, A4)
-let openFacilityId=null;
-let view='home';
-let map=null,facilityLayer=null,userLayer=null,markerById=new Map(),tileLayer=null;
-let inflight=null;
-let isOnline=navigator.onLine;
-let homeScrollY=0;
-let searchRows=[];
+    function getUrlState(){const p=new URLSearchParams(location.search);return{lat:parseFloat(p.get('lat'))||null,lng:parseFloat(p.get('lng'))||null,z:parseInt(p.get('z'))||null,types:p.get('types')?p.get('types').split(','):null,state:p.get('state')||null,facilityId:p.get('fid')||null,theme:p.get('theme')||null}}
+    function pushUrlState(replace){if(!map)return;const c=map.getCenter(),p=new URLSearchParams;p.set('lat',c.lat.toFixed(4));p.set('lng',c.lng.toFixed(4));p.set('z',map.getZoom());const t=Array.from(activeTypes).sort();const allTypes=FACILITY_TYPES.map(x=>x.value).sort();if(t.join(',')!==allTypes.join(','))p.set('types',t.join(','));if(filteredState)p.set('state',filteredState);if(openFacilityId)p.set('fid',openFacilityId);if(currentTheme==='dark')p.set('theme','dark');const url=location.pathname+'?'+p.toString();if(replace)history.replaceState(null,'',url);else history.pushState(null,'',url)}
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-const $=id=>document.getElementById(id);
-function escapeHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
-function jsq(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")} // retained (FA-1); no inline handlers remain
-function truthy(v){if(v===true)return true;if(v===false||v==null)return false;const s=String(v).toLowerCase();return s==='y'||s==='yes'||s==='true'||s==='1'}
-function debounce(fn,ms){let t;return function(...a){clearTimeout(t);t=setTimeout(()=>fn.apply(this,a),ms)}}
-function normSev(s){if(s==null)return null;const u=String(s).trim().toUpperCase();return SEV_RANK[u]?u:null}
-function haversineMiles(lat1,lng1,lat2,lng2){const R=3958.8,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(a))}
-function fmtDist(mi){if(mi==null||!isFinite(mi))return'';return(mi<10?mi.toFixed(1):String(Math.round(mi)))+' mi'}
-function isDesktop(){return window.innerWidth>=960}
-function icon(name,cls){return'<svg class="icon'+(cls?' '+cls:'')+'" aria-hidden="true"><use href="#i-'+name+'"/></svg>'}
-function scoreOf(f){return(f&&f.final_score!=null)?Number(f.final_score):null}
-function labelOf(f){const c=f&&f.score_classification;return(c&&BAND[c])?c:'Unrated'}
-function stateName(abbr){const s=STATE_BY_ABBR[abbr];return s?s.n:null}
-function typeNoun(){const t=Array.from(activeTypes);if(journey){const j=JOURNEYS.find(x=>x.key===journey);if(j&&j.types.length===t.length&&j.types.every(v=>activeTypes.has(v)))return j.title}if(t.length===1)return TYPE_LABEL[t[0]];if(t.length===FACILITY_TYPES.length)return'All facilities';return'Facilities'}
-function toast(msg){const t=$('toast');if(!t)return;t.textContent=msg;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),2200)}
+    function initMap(){
+        const u=getUrlState();
+        const center=(u.lat&&u.lng)?[u.lat,u.lng]:[39.5,-98.0];
+        const zoom=u.z||4;
+        // ATTRIB-FIX (v1.6): disable Leaflet's default attribution control so the
+        // non-required "Leaflet" prefix link is dropped, then re-add an attribution
+        // control WITHOUT the prefix. The CARTO + CMS attribution below is REQUIRED
+        // (CARTO basemap terms + the OSM data beneath them + FTP's honest-sourcing
+        // brand) and is preserved via the tileLayer attribution string.
+        map=L.map('map',{center,zoom,zoomControl:false,attributionControl:false,preferCanvas:true});
+        L.control.attribution({prefix:false}).addTo(map);
+        L.tileLayer(tileUrlFor(currentTheme),{attribution:TILE_ATTR,subdomains:'abcd',maxZoom:20}).addTo(map);
+        // CAP-VIZ (C3-NOCLUSTER): facilities are NEVER clustered. Every facility is
+        // its own marker in this plain layer group, at every zoom — no pie charts.
+        // (The markercluster library + CSS remain loaded so no dependency is removed,
+        //  Invariant #17 intact, but markerClusterGroup is no longer instantiated.)
+        facilityLayer=L.layerGroup().addTo(map);
+        // Retained second un-clustered layer used only in the state drill-down so the
+        // two visual treatments (ordinary dot vs brighter state dot) stay separable.
+        stateFacilityLayer=L.layerGroup().addTo(map);
+        stateBubbleLayer=L.layerGroup().addTo(map);
+        // GEO-DOT (v5.8): a dedicated layer for the visitor's own location marker —
+        // added LAST so the pulsing blue "you are here" dot always renders ABOVE the
+        // facility markers/state bubbles. It is its own layer so it survives the
+        // clearLayers() calls that reset the facility/state layers on view changes.
+        userLocationLayer=L.layerGroup().addTo(map);
+        wireCapabilityFilter();buildLegend();
+        map.getContainer().addEventListener('touchstart',()=>{isTouching=true},{passive:true});
+        map.getContainer().addEventListener('touchend',()=>{isTouching=false;if(pendingFetch){pendingFetch=false;onViewChange()}},{passive:true});
+        const dv=debounce(()=>{if(isTouching){pendingFetch=true;return}onViewChange();pushUrlState(true)},300);
+        map.on('moveend',dv);map.on('zoomend',dv);
+        buildFilterChips();wireNameSearch();wireResizeHandle();wireStateFilterBadge();wireEnfFilter();
+        buildSheetChips();wireViewToggle();wireDetailBar();
+        if(u.types)activeTypes=new Set(u.types.filter(t=>TYPE_LABEL[t]));
+        if(u.state&&STATE_BY_ABBR[u.state])filteredState=u.state;
+        syncChips();
+        updateStateFilterIndicator();
+        loadStateSummary().then(()=>{
+            if(!u.lat&&navigator.geolocation){
+                navigator.geolocation.getCurrentPosition(pos=>{
+                    // MC1-ZOOM (request #1): land on the visitor's METRO area, not a
+                    // multi-state regional view. Set userLocation so the nearby list
+                    // is distance-sorted from the first paint.
+                    // v5.8 (GEO-DEFAULT + GEO-DOT): the DEFAULT mobile view is the MAP
+                    // (not the list) — more intuitive on first open; the user sees the
+                    // map with their own location and can toggle to List with one tap.
+                    // The pulsing blue "you are here" dot marks their exact position so
+                    // they can read their proximity to nearby facilities at a glance.
+                    userLocation={lat:pos.coords.latitude,lng:pos.coords.longitude};
+                    map.setView([pos.coords.latitude,pos.coords.longitude],11);
+                    renderUserLocation();
+                },()=>onViewChange(),{timeout:6000,maximumAge:120000});
+            }else{onViewChange()}
+        });
+        setTimeout(()=>{if(!currentFacilities.length&&!stateSummaryCache)onViewChange()},2000);
+        if(u.facilityId)setTimeout(()=>openFacilityDetail(u.facilityId),500);
+        window.addEventListener('popstate',()=>{const s=getUrlState();if(!s.facilityId&&openFacilityId)closeFacilityInfo();else if(s.facilityId&&s.facilityId!==openFacilityId)openFacilityDetail(s.facilityId)});
+        document.getElementById('loading').classList.add('hidden');
+    }
 
-// ── The stamp: one renderer for the verdict's color+word+number (⧖Inv #46/#47) ──
-function stampHtml(f,big){
-  const lbl=labelOf(f),band=BAND[lbl],s=scoreOf(f);
-  const num=(lbl==='Unrated'||s==null)?'not scored':s.toFixed(1);
-  return'<div class="stamp '+(band==='unrated'?'unrated':'')+'" aria-label="Score '+escapeHtml(num)+', '+escapeHtml(BAND_WORD[lbl])+'"><span class="num band-'+band+'">'+escapeHtml(num)+'</span><span class="word">'+escapeHtml(BAND_WORD[lbl])+'</span></div>';
-}
-function ribbonHtml(f){
-  if(!f||!f.has_active_enforcement)return'';
-  const sev=normSev(f.enforcement_severity);
-  const light=sev&&SEV_RANK[sev]<=2;
-  return'<span class="ribbon'+(light?' outline':'')+'">'+icon('flag')+'Flagged'+(sev?': '+escapeHtml(SEV_WORD[sev]):'')+'</span>';
-}
-function payLineHtml(f){return truthy(f&&f.has_payment_penalty)?'<div class="pay-line">Medicare reduced payments here last year — a routine payment adjustment, not a safety flag.</div>':''}
+    async function loadStateSummary(){try{const{data,error}=await sb.from('state_summary').select('*');if(error)throw error;stateSummaryCache=data||[];dlog('state_summary:',stateSummaryCache.length,'rows')}catch(e){derr('state_summary failed:',e);stateSummaryCache=[]}}
 
-// ── Front door controls ─────────────────────────────────────────────────────
-function buildControls(){
-  $('journeys').innerHTML=JOURNEYS.map(j=>'<button class="journey" type="button" data-journey="'+j.key+'" aria-pressed="'+(journey===j.key)+'">'+escapeHtml(j.label)+'</button>').join('');
-  $('radius-chips').innerHTML='<span class="lbl">Within</span>'+RADII.map(r=>'<button class="chip" type="button" data-radius="'+r+'" aria-pressed="'+(radius===r)+'">'+r+' mi</button>').join('');
-  $('type-chips').innerHTML=FACILITY_TYPES.map(t=>'<button class="chip" type="button" role="switch" data-type="'+t.value+'" aria-checked="'+activeTypes.has(t.value)+'">'+escapeHtml(t.label)+'</button>').join('');
-  $('cap-chips').innerHTML=CAPABILITIES.map(c=>'<button class="chip" type="button" role="switch" data-cap="'+c.key+'" aria-checked="'+!!activeCaps[c.key]+'">'+escapeHtml(c.label)+'</button>').join('');
-  const sel=$('state-select');sel.innerHTML='<option value="">Pick a state…</option>'+US_STATES.map(s=>'<option value="'+s.s+'">'+escapeHtml(s.n)+'</option>').join('');
-  syncControls();
-}
-function syncControls(){
-  document.querySelectorAll('[data-journey]').forEach(b=>b.setAttribute('aria-pressed',String(journey===b.dataset.journey)));
-  document.querySelectorAll('[data-radius]').forEach(b=>b.setAttribute('aria-pressed',String(radius===Number(b.dataset.radius))));
-  document.querySelectorAll('[data-type]').forEach(b=>b.setAttribute('aria-checked',String(activeTypes.has(b.dataset.type))));
-  document.querySelectorAll('[data-cap]').forEach(b=>b.setAttribute('aria-checked',String(!!activeCaps[b.dataset.cap])));
-  const fo=$('flag-only');if(fo)fo.setAttribute('aria-pressed',String(flagOnly));
-  const capWrap=$('cap-chips');if(capWrap){const show=activeTypes.has('hospital');capWrap.hidden=!show;const h=capWrap.previousElementSibling;if(h&&h.tagName==='H3')h.hidden=!show}
-  const rc=$('radius-chips');if(rc)rc.hidden=!!(origin&&origin.kind==='state');
-  const sel=$('state-select');if(sel)sel.value=(origin&&origin.kind==='state')?origin.state:'';
-  const lbl=$('near-label');
-  if(lbl){
-    if(!origin)lbl.textContent='Where should we look? Use your location, or pick a state.';
-    else if(origin.kind==='geo')lbl.textContent='Showing facilities near your location.';
-    else if(origin.kind==='state')lbl.textContent='Showing every facility in '+(stateName(origin.state)||origin.state)+', best score first.';
-    else lbl.textContent='Showing facilities near the linked location.';
-  }
-  const ul=$('use-location');if(ul)ul.setAttribute('aria-pressed',String(!!(origin&&origin.kind==='geo')));
-  $('results-title').textContent=origin&&origin.kind==='state'?(typeNoun()+' in '+(stateName(origin.state)||origin.state)):(typeNoun()+(origin?' within '+radius+' miles':''));
-  $('sort-note').textContent=origin&&origin.kind==='state'?'Sorted by score, best first. The stamp is the verdict; a red ribbon means state inspectors found active problems.':'Sorted by distance. The stamp is the verdict; a red ribbon means state inspectors found active problems.';
-}
-function setJourney(key){const j=JOURNEYS.find(x=>x.key===key);if(!j)return;journey=key;activeTypes=new Set(j.types);syncControls();pushUrlState(true);fetchFeed()}
-function toggleType(v){if(activeTypes.has(v))activeTypes.delete(v);else activeTypes.add(v);journey=null;syncControls();pushUrlState(true);fetchFeed()}
-function setRadius(r){radius=r;syncControls();pushUrlState(true);fetchFeed()}
-function toggleCap(key){activeCaps[key]=!activeCaps[key];syncControls();pushUrlState(true);if(CAP_SERVER_KEYS.includes(key))fetchFeed();else renderFeed()}
-function toggleFlagOnly(){flagOnly=!flagOnly;syncControls();pushUrlState(true);renderFeed()}
-function useMyLocation(){
-  if(!navigator.geolocation){toast('Location is not available on this device.');return}
-  setFeedBusy(true);
-  navigator.geolocation.getCurrentPosition(pos=>{origin={lat:pos.coords.latitude,lng:pos.coords.longitude,kind:'geo'};syncControls();pushUrlState(true);fetchFeed();renderUserDot()},
-    ()=>{setFeedBusy(false);toast('Could not get your location. Pick a state instead.');renderEmpty('no-origin')},{timeout:6000,maximumAge:120000});   // Invariant #11
-}
-function pickState(abbr){const s=STATE_BY_ABBR[abbr];if(!s){origin=null;syncControls();renderEmpty('no-origin');return}origin={lat:s.lat,lng:s.lng,kind:'state',state:abbr};syncControls();pushUrlState(true);fetchFeed()}
+    // ── GEO-DOT (v5.8): the visitor's own location marker ────────────────────
+    // A slightly larger pulsing BLUE dot marking exactly where the user is, so
+    // they can judge their proximity to nearby facilities at a glance. It is
+    // deliberately distinct from facility markers: blue (never a rating/score or
+    // enforcement color — Invariant #18 carve-out for a non-facility UI marker),
+    // a soft expanding pulse ring, and a white halo so it reads on any basemap.
+    // Rendered into its own userLocationLayer (kept above the facility markers).
+    // Uses L.divIcon, never circleMarker (Invariant #7); the literal blue lives
+    // in CSS (.ftp-geo-dot), JS only emits the class. Idempotent: re-rendering
+    // clears the prior dot first, so it never stacks. No-op if no userLocation
+    // or no map yet (e.g. geolocation denied — the dot simply never appears).
+    function renderUserLocation(){
+        if(!map||!userLocationLayer||!userLocation)return;
+        userLocationLayer.clearLayers();
+        const icon=L.divIcon({className:'',html:'<div class="ftp-geo-dot" role="img" aria-label="Your location"><span class="ftp-geo-pulse" aria-hidden="true"></span><span class="ftp-geo-core" aria-hidden="true"></span></div>',iconSize:[26,26],iconAnchor:[13,13]});
+        const m=L.marker([userLocation.lat,userLocation.lng],{icon,interactive:false,keyboard:false,zIndexOffset:1000});
+        userLocationLayer.addLayer(m);
+    }
 
-// ── URL state ───────────────────────────────────────────────────────────────
-function getUrlState(){const p=new URLSearchParams(location.search);return{lat:parseFloat(p.get('lat'))||null,lng:parseFloat(p.get('lng'))||null,r:parseInt(p.get('r'))||null,types:p.get('types')?p.get('types').split(',').filter(t=>TYPE_LABEL[t]):null,journey:p.get('j')||null,state:p.get('state')||null,fid:p.get('fid')||null,theme:p.get('theme')||null,flag:p.get('flag')==='1'}}
-function pushUrlState(replace){
-  const p=new URLSearchParams;
-  if(openFacilityId)p.set('fid',openFacilityId);
-  else{
-    if(origin&&origin.kind==='state')p.set('state',origin.state);
-    else if(origin){p.set('lat',origin.lat.toFixed(4));p.set('lng',origin.lng.toFixed(4))}
-    if(radius!==25)p.set('r',String(radius));
-    if(journey)p.set('j',journey);else p.set('types',Array.from(activeTypes).sort().join(','));
-    if(flagOnly)p.set('flag','1');
-  }
-  if(currentTheme==='dark')p.set('theme','dark');
-  const q=p.toString();const url=location.pathname+(q?'?'+q:'');
-  if(replace)history.replaceState(null,'',url);else history.pushState(null,'',url);
-}
+    function onViewChange(){
+        if(!map)return;
+        const z=map.getZoom();
+        if(z<STATE_ZOOM){
+            if(currentViewMode!=='state'){facilityLayer.clearLayers();stateFacilityLayer.clearLayers();currentFacilities=[]}
+            currentViewMode='state';
+            if(filteredState){filteredState=null;updateStateFilterIndicator()}
+            renderStateBubbles();
+        }else{
+            if(currentViewMode!=='facility')stateBubbleLayer.clearLayers();
+            currentViewMode='facility';
+            fetchInView();
+        }
+    }
 
-// ── Fetching the feed (Invariants #3–5, #6) ─────────────────────────────────
-function setFeedBusy(b){const f=$('feed');f.setAttribute('aria-busy',b?'true':'false');if(b){f.innerHTML='<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';$('feed-more').innerHTML='';$('results-count').textContent=''}}
-async function fetchFeed(){
-  if(!origin){renderEmpty('no-origin');return}
-  if(!isOnline){renderEmpty('offline');return}
-  const types=Array.from(activeTypes);
-  if(!types.length){currentFacilities=[];renderEmpty('no-types');return}
-  const stateMode=origin.kind==='state';
-  const params={p_lat:origin.lat,p_lng:origin.lng,p_radius_miles:stateMode?500:radius,p_types:types,p_min_score:null,
-    p_require_nicu:!!activeCaps.nicu,p_require_cath:!!activeCaps.cath,p_require_trauma:!!activeCaps.trauma,p_require_teaching:!!activeCaps.teaching,p_require_er:!!activeCaps.er,p_limit:5000};
-  dlog('nearby_facilities',JSON.stringify(params));
-  setFeedBusy(true);
-  if(inflight)inflight.abort();
-  const ctrl=new AbortController();inflight=ctrl;
-  try{
-    const{data,error}=await sb.rpc('nearby_facilities',params).abortSignal(ctrl.signal);
-    if(ctrl.signal.aborted)return;
-    if(error)throw error;
-    let rows=data||[];
-    if(stateMode)rows=rows.filter(r=>r.state===origin.state);
-    rows.forEach(r=>{r._dist=(r.latitude!=null&&r.longitude!=null)?haversineMiles(origin.lat,origin.lng,Number(r.latitude),Number(r.longitude)):Infinity});
-    if(stateMode)rows.sort((a,b)=>(scoreOf(b)??-1)-(scoreOf(a)??-1)||a._dist-b._dist);
-    else rows.sort((a,b)=>a._dist-b._dist);
-    currentFacilities=rows;shownCount=PAGE;if(map)map._ftpFitted=false;
-    dlog('rows',rows.length);
-    renderFeed();
-  }catch(e){if(e&&e.name==='AbortError')return;derr('nearby_facilities failed',e);renderEmpty('error',e)}
-  finally{if(inflight===ctrl)inflight=null;$('feed').setAttribute('aria-busy','false')}
-}
-function capabilityClientFilter(rows){
-  const active=CAP_CLIENT.filter(c=>activeCaps[c.key]);if(!active.length)return rows;
-  return rows.filter(f=>active.every(c=>{const v=f[c.field];if(c.cmiMin!=null){const n=Number(v);return isFinite(n)&&n>=c.cmiMin}return truthy(v)}));
-}
-function visibleFacilities(){let rows=flagOnly?currentFacilities.filter(f=>!!f.has_active_enforcement):currentFacilities;return capabilityClientFilter(rows)}
+    function renderStateBubbles(){
+        stateBubbleLayer.clearLayers();
+        if(!stateSummaryCache||!stateSummaryCache.length)return;
+        const agg={};
+        stateSummaryCache.forEach(r=>{if(!activeTypes.has(r.facility_type))return;if(!agg[r.state])agg[r.state]={count:0,scoreSum:0,scoredCount:0};agg[r.state].count+=Number(r.facility_count);if(r.mean_score!=null&&r.scored_count>0){agg[r.state].scoreSum+=Number(r.mean_score)*Number(r.scored_count);agg[r.state].scoredCount+=Number(r.scored_count)}});
+        const counts=Object.values(agg).map(a=>a.count);
+        const maxCount=Math.max(...counts,1);
+        let totalAll=0,scoreSumAll=0,scoredAll=0;
+        Object.entries(agg).forEach(([st,d])=>{
+            const si=STATE_BY_ABBR[st];if(!si)return;
+            totalAll+=d.count;scoreSumAll+=d.scoreSum;scoredAll+=d.scoredCount;
+            const avg=d.scoredCount>0?d.scoreSum/d.scoredCount:null;
+            const bg=scoreToClassColor(avg);
+            const minS=30,maxS=62;
+            const logS=Math.log(d.count+1)/Math.log(maxCount+1);
+            const size=Math.round(minS+logS*(maxS-minS));
+            const fs=size<38?10:size<50?12:14;
+            const cfs=Math.max(8,fs-3);
+            const icon=L.divIcon({className:'',html:'<div class="state-bubble" style="width:'+size+'px;height:'+size+'px;background:'+bg+'"><span class="st-abbr" style="font-size:'+fs+'px;color:var(--band-text)">'+st+'</span><span class="st-count" style="font-size:'+cfs+'px;color:var(--band-text)">'+d.count.toLocaleString()+'</span></div>',iconSize:[size,size],iconAnchor:[size/2,size/2]});
+            const m=L.marker([si.lat,si.lng],{icon});
+            m.on('click',()=>{filteredState=st;updateStateFilterIndicator();if(isMobile)setSheetView('list');map.setView([si.lat,si.lng],STATE_ZOOM)});
+            const scoreStr=avg!=null?avg.toFixed(1):'—';
+            m.bindTooltip('<strong>'+si.n+'</strong><br>'+d.count.toLocaleString()+' facilities · avg '+scoreStr,{direction:'top',offset:[0,-size/2-4]});
+            stateBubbleLayer.addLayer(m);
+        });
+        const avgAll=scoredAll>0?(scoreSumAll/scoredAll).toFixed(1):'—';
+        setStats(totalAll,avgAll,activeTypeNoun()+' nationwide');
+        if(isMobile)renderSheetList();
+    }
 
-// ── Rendering the feed of postcards ─────────────────────────────────────────
-function cardHtml(f){
-  const lbl=labelOf(f);const inCmp=compare.some(c=>String(c.facility_id)===String(f.facility_id));
-  const meta=[TYPE_LABEL[f.facility_type]||'',fmtDist(f._dist),[f.city,f.state].filter(Boolean).join(', ')].filter(Boolean).map(escapeHtml).join(' · ');
-  return'<article class="postcard" tabindex="-1" data-card="'+escapeHtml(f.facility_id)+'">'+
-    '<div class="pc-main">'+ribbonHtml(f)+
-      '<h3 class="pc-name"><a href="?fid='+encodeURIComponent(f.facility_id)+'" data-open="'+escapeHtml(f.facility_id)+'">'+escapeHtml(f.facility_name||'')+'</a></h3>'+
-      '<p class="pc-verdict">'+escapeHtml(VERDICT[lbl])+(f.has_active_enforcement?' State inspectors found active problems.':'')+'</p>'+
-      '<div class="pc-meta">'+meta+'</div>'+
-      '<div class="pc-actions"><button class="btn small compare" type="button" data-compare="'+escapeHtml(f.facility_id)+'" aria-pressed="'+inCmp+'">'+icon('compare')+(inCmp?'Added':'Compare')+'</button></div>'+
-    '</div>'+stampHtml(f)+payLineHtml(f)+'</article>';
-}
-function renderFeed(){
-  const feed=$('feed'),more=$('feed-more');
-  const rows=visibleFacilities();
-  syncControls();
-  if(!currentFacilities.length){renderEmpty('no-results');return}
-  if(!rows.length){renderEmpty(flagOnly?'no-flag':'no-cap');return}
-  const shown=rows.slice(0,shownCount);
-  feed.innerHTML=shown.map(cardHtml).join('');
-  $('results-count').textContent=rows.length.toLocaleString()+(rows.length===1?' result':' results')+(currentFacilities.length>=5000?' (nearest 5,000)':'');
-  more.innerHTML=rows.length>shown.length?'<button class="btn" type="button" id="show-more">Show more ('+(rows.length-shown.length).toLocaleString()+' left)</button>':'';
-  renderMarkers(rows);
-}
-function renderEmpty(kind,err){
-  const feed=$('feed');$('feed-more').innerHTML='';$('results-count').textContent='';
-  const wider=RADII.find(r=>r>radius);
-  const copy={
-    'no-origin':['Where should we look?','Turn on your location, or pick a state above.','<button class="btn primary" type="button" data-act="location">'+icon('location')+' Use my location</button>'],
-    'no-types':['No facility types selected','Pick a journey above, or turn on at least one type under More filters.',''],
-    'no-results':['No '+typeNoun().toLowerCase()+' within '+radius+' miles',wider?'Widen the search, or look one up by name.':'Try a different journey or facility type, or look one up by name.',wider?'<button class="btn primary" type="button" data-act="widen" data-radius="'+wider+'">Widen to '+wider+' miles</button>':''],
-    'no-flag':['No flagged facilities here','None of these have an active inspection finding. That is good news for the area.','<button class="btn" type="button" data-act="unflag">Show all</button>'],
-    'no-cap':['Nothing matches every need','Remove a requirement to see more.','<button class="btn" type="button" data-act="clearcaps">Clear needs</button>'],
-    'offline':['You are offline','The feed needs a connection. It will reload when you are back online.',''],
-    'error':['Could not load the feed',(err&&err.message)?escapeHtml(err.message):'Something went wrong on our side.','<button class="btn primary" type="button" data-act="retry">Try again</button>']
-  }[kind]||['Nothing here','',''];
-  if(origin&&origin.kind==='state'&&kind==='no-results'){copy[0]='No '+typeNoun().toLowerCase()+' in '+(stateName(origin.state)||origin.state);copy[1]='Try another type.';copy[2]=''}
-  feed.innerHTML='<div class="empty"><h3>'+copy[0]+'</h3><p>'+copy[1]+'</p>'+copy[2]+'</div>';
-  if(kind!=='no-flag'&&kind!=='no-cap')renderMarkers([]);
-}
+    // CAP-VIZ (C3-NOCLUSTER): createClusterIcon is RETAINED but NO LONGER CALLED.
+    // Facilities are never clustered, so the pie-chart icon builder is dead code.
+    // It is kept (a) so the markercluster dependency need not be removed (Invariant
+    // #17) and (b) as a record of the old behavior should clustering ever return via
+    // an explicit numbered decision. Do not wire it back without one.
+    function createClusterIcon(cluster){
+        const ch=cluster.getAllChildMarkers(),count=ch.length,size=count<20?40:count<100?48:56;
+        const cnts={};ch.forEach(m=>{const c=m.options._classification||'Unrated';cnts[c]=(cnts[c]||0)+1});
+        const r=size/2;let segs='',sa=0;
+        CLASS_ORDER.forEach(cls=>{if(!cnts[cls])return;const pct=cnts[cls]/count,ea=sa+pct*360,lg=pct>.5?1:0,sr=sa*Math.PI/180,er=ea*Math.PI/180;
+        const x1=r+r*Math.sin(sr),y1=r-r*Math.cos(sr),x2=r+r*Math.sin(er),y2=r-r*Math.cos(er);
+        if(pct>=.999)segs+='<circle cx="'+r+'" cy="'+r+'" r="'+r+'" fill="'+classColor(cls)+'"/>';
+        else segs+='<path d="M'+r+','+r+' L'+x1+','+y1+' A'+r+','+r+' 0 '+lg+' 1 '+x2+','+y2+' Z" fill="'+classColor(cls)+'"/>';sa=ea});
+        return L.divIcon({html:'<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" xmlns="http://www.w3.org/2000/svg">'+segs+'<circle cx="'+r+'" cy="'+r+'" r="'+(r*.6)+'" fill="'+(currentTheme==='dark'?'#221B38':'#FFFFFF')+'"/><text x="'+r+'" y="'+r+'" text-anchor="middle" dominant-baseline="central" font-size="'+(size<48?11:13)+'" font-weight="700" fill="'+(currentTheme==='dark'?'#F3F0EA':'#231A3D')+'">'+count+'</text></svg>',className:'cluster-pie',iconSize:[size,size],iconAnchor:[size/2,size/2]});
+    }
 
-// ── The map: a section, not the surface (D152 attribution visible when open) ──
-function tilesFor(theme){return'https://{s}.basemaps.cartocdn.com/'+(theme==='dark'?'dark_all':'light_all')+'/{z}/{x}/{y}{r}.png'}
-function ensureMap(){
-  if(map||!window.L)return!!map;
-  const el=$('map');if(!el)return false;
-  map=L.map('map',{center:origin?[origin.lat,origin.lng]:[39.5,-98],zoom:origin?(origin.kind==='state'?7:10):4,zoomControl:true,attributionControl:false,preferCanvas:true});
-  L.control.attribution({prefix:false}).addTo(map);
-  tileLayer=L.tileLayer(tilesFor(currentTheme),{attribution:'&copy; CARTO &middot; CMS public data',subdomains:'abcd',maxZoom:20}).addTo(map);
-  facilityLayer=L.layerGroup().addTo(map);
-  userLayer=L.layerGroup().addTo(map);
-  renderMarkers(visibleFacilities());renderUserDot();
-  return true;
-}
-function renderMarkers(rows){
-  if(!map||!facilityLayer)return;
-  facilityLayer.clearLayers();markerById.clear();
-  const pts=[];
-  rows.forEach(f=>{
-    if(f.latitude==null||f.longitude==null)return;
-    const lbl=labelOf(f),band=BAND[lbl],color=BAND_HEX[band];
-    const sev=f.has_active_enforcement?normSev(f.enforcement_severity):null;
-    const ds=isDesktop()?12:14;let html,w=ds;
-    const dot='<div class="ftp-dot'+(band==='unrated'?' unrated':'')+'" style="background:'+color+';width:'+ds+'px;height:'+ds+'px"></div>';
-    if(sev){const pad=SEV_RANK[sev]>=3?7:5;w=ds+pad*2;html='<div class="ftp-flag" style="width:'+w+'px;height:'+w+'px"><span class="ring'+(SEV_RANK[sev]<=2?' light':'')+'"></span>'+dot+'</div>'}
-    else html=dot;
-    const m=L.marker([Number(f.latitude),Number(f.longitude)],{icon:L.divIcon({className:'',html,iconSize:[w,w],iconAnchor:[w/2,w/2]}),keyboard:false});
-    const s=scoreOf(f);
-    m.bindPopup('<strong>'+escapeHtml(f.facility_name||'')+'</strong><br><span style="color:var(--muted);font-size:12px">'+escapeHtml(TYPE_LABEL[f.facility_type]||'')+'</span><br><span class="pp-score '+(band==='unrated'?'unrated':'')+'" style="background:'+(band==='unrated'?'transparent':color)+'">'+(s==null?'not scored':s.toFixed(1))+' · '+escapeHtml(BAND_WORD[lbl])+'</span>'+(sev?'<br><span style="color:var(--flag);font-weight:600;font-size:12px">Flagged: '+escapeHtml(SEV_WORD[sev])+'</span>':''),{maxWidth:240});
-    m.on('click',()=>focusCard(f.facility_id));
-    facilityLayer.addLayer(m);markerById.set(String(f.facility_id),m);pts.push([Number(f.latitude),Number(f.longitude)]);
-  });
-  if(pts.length&&!map._ftpFitted){map._ftpFitted=true;try{map.fitBounds(L.latLngBounds(pts).pad(0.15),{maxZoom:12})}catch(e){}}
-}
-function renderUserDot(){
-  if(!map||!userLayer||!origin||origin.kind!=='geo')return;
-  userLayer.clearLayers();
-  userLayer.addLayer(L.marker([origin.lat,origin.lng],{icon:L.divIcon({className:'',html:'<div class="ftp-geo" role="img" aria-label="Your location"><span class="pulse"></span><span class="core"></span></div>',iconSize:[26,26],iconAnchor:[13,13]}),interactive:false,keyboard:false,zIndexOffset:1000}));
-}
-function focusCard(fid){
-  const rows=visibleFacilities();const idx=rows.findIndex(r=>String(r.facility_id)===String(fid));
-  if(idx<0){openFacility(fid);return}
-  if(idx>=shownCount){shownCount=Math.ceil((idx+1)/PAGE)*PAGE;renderFeed()}
-  const card=Array.from(document.querySelectorAll('[data-card]')).find(c=>c.dataset.card===String(fid));
-  if(!card){openFacility(fid);return}
-  document.querySelectorAll('.postcard.is-focus').forEach(c=>c.classList.remove('is-focus'));
-  card.classList.add('is-focus');card.scrollIntoView({block:'center'});card.focus({preventScroll:true});
-}
-function syncMapLayout(){
-  const sec=$('map-section');if(!sec)return;
-  if(isDesktop()){if(!sec.open)sec.open=true;ensureMap()}
-  if(map)setTimeout(()=>map.invalidateSize(),60);
-}
+    function buildFilterChips(){
+        const sc=document.getElementById('chip-scroll');sc.innerHTML='';
+        FACILITY_TYPES.forEach(t=>{const c=document.createElement('button');c.className='f-chip'+(activeTypes.has(t.value)?' active':'');c.dataset.type=t.value;c.setAttribute('role','switch');c.setAttribute('aria-checked',activeTypes.has(t.value));c.setAttribute('aria-label',t.label);c.type='button';c.innerHTML=icon(t.icon)+' '+t.label;c.addEventListener('click',()=>{if(activeTypes.has(t.value))activeTypes.delete(t.value);else activeTypes.add(t.value);haptic(10);syncChips();onViewChange()});sc.appendChild(c)});
+        syncChips();
+    }
 
-// ── Compare tray (session-only) ─────────────────────────────────────────────
-function toggleCompare(fid){
-  const i=compare.findIndex(c=>String(c.facility_id)===String(fid));
-  if(i>-1)compare.splice(i,1);
-  else{const f=currentFacilities.find(r=>String(r.facility_id)===String(fid))||searchRows.find(r=>String(r.facility_id)===String(fid));if(!f)return;if(compare.length>=3){toast('You can compare three at a time.');return}compare.push(f)}
-  renderTray();
-  document.querySelectorAll('[data-compare]').forEach(b=>{const on=compare.some(c=>String(c.facility_id)===b.dataset.compare);b.setAttribute('aria-pressed',String(on));b.innerHTML=icon('compare')+(on?'Added':'Compare')});
-}
-function renderTray(){
-  const tray=$('tray'),slots=$('tray-slots'),msg=$('tray-msg'),go=$('tray-go');
-  slots.innerHTML=[0,1,2].map(i=>{const f=compare[i];if(!f)return'<span class="slot"></span>';const lbl=labelOf(f),band=BAND[lbl],s=scoreOf(f);return'<span class="slot on '+(band==='unrated'?'unrated':'band-'+band)+'" title="'+escapeHtml(f.facility_name||'')+'">'+(s==null?'—':s.toFixed(1))+'<button type="button" data-uncompare="'+escapeHtml(f.facility_id)+'" aria-label="Remove '+escapeHtml(f.facility_name||'')+'">×</button></span>'}).join('');
-  const n=compare.length;
-  msg.textContent=n===0?'':n===1?'Add one more to compare.':n+' of 3 selected.';
-  go.disabled=n<2;
-  tray.classList.toggle('on',n>0);document.body.classList.toggle('has-tray',n>0);
-}
-function showCompare(){
-  if(compare.length<2)return;
-  homeScrollY=window.scrollY;
-  $('compare-body').innerHTML='<div class="compare-grid">'+compare.map(f=>{const lbl=labelOf(f);return'<div class="compare-card">'+stampHtml(f)+'<h3>'+escapeHtml(f.facility_name||'')+'</h3><div class="m">'+escapeHtml(TYPE_LABEL[f.facility_type]||'')+(f._dist!=null&&isFinite(f._dist)?' · '+fmtDist(f._dist):'')+'</div>'+ribbonHtml(f)+'<p>'+escapeHtml(VERDICT[lbl])+'</p>'+payLineHtml(f)+'<a class="btn small" href="?fid='+encodeURIComponent(f.facility_id)+'" data-open="'+escapeHtml(f.facility_id)+'">Open report</a></div>'}).join('')+'</div><p class="provenance" style="margin-top:12px">Data as of '+escapeHtml(DATA_VINTAGE)+' · one score per facility, from CMS compulsory reporting.</p>';
-  setView('compare');window.scrollTo(0,0);
-}
+    function syncChips(){
+        document.querySelectorAll('.f-chip[data-type]').forEach(c=>{const a=activeTypes.has(c.dataset.type);c.classList.toggle('active',a);c.setAttribute('aria-checked',a)});
+        document.querySelectorAll('.sheet-chip[data-type]').forEach(c=>{const a=activeTypes.has(c.dataset.type);c.classList.toggle('on',a);c.setAttribute('aria-checked',a)});
+        pushUrlState(true);
+    }
 
-// ── Views ───────────────────────────────────────────────────────────────────
-function setView(v){
-  view=v;
-  $('view-home').hidden=v!=='home';$('view-facility').hidden=v!=='facility';$('view-compare').hidden=v!=='compare';
-  const nav=document.querySelector('.site-nav a[href="/"]');if(nav){if(v==='home')nav.setAttribute('aria-current','page');else nav.removeAttribute('aria-current')}
-  if(v!=='home')document.body.classList.remove('has-tray');else renderTray();
-}
-function goHome(){
-  openFacilityId=null;document.title='ForThePatient.org — independent quality reports for hospitals, nursing homes and more';
-  setView('home');pushUrlState(true);
-  requestAnimationFrame(()=>{window.scrollTo(0,homeScrollY);if(map)map.invalidateSize()});
-}
+    function updateStateFilterIndicator(){
+        const on=!!(filteredState&&STATE_BY_ABBR[filteredState]);
+        const badge=document.getElementById('state-filter-badge');
+        const nameEl=document.getElementById('state-filter-name');
+        if(badge&&nameEl){if(on){nameEl.textContent=STATE_BY_ABBR[filteredState].n;badge.hidden=false}else{badge.hidden=true;nameEl.textContent=''}}
+        const pill=document.getElementById('sheet-state-pill');
+        const pillName=document.getElementById('sheet-state-name');
+        if(pill&&pillName){if(on){pillName.textContent=STATE_BY_ABBR[filteredState].n;pill.classList.add('active')}else{pill.classList.remove('active');pillName.textContent=''}}
+    }
 
-// ── The facility report (scroll document) ───────────────────────────────────
-async function openFacility(fid,fromPop){
-  if(!fid)return;
-  if(view==='home')homeScrollY=window.scrollY;
-  openFacilityId=String(fid);
-  if(!fromPop)pushUrlState(false);
-  document.title='Loading… — ForThePatient.org';
-  setView('facility');window.scrollTo(0,0);
-  $('report-body').innerHTML='<div class="skeleton" style="height:220px"></div><div class="skeleton" style="margin-top:14px"></div><div class="skeleton" style="margin-top:14px"></div>';
-  try{
-    const{data,error}=await sb.rpc('facility_detail',{p_facility_id:fid});
-    if(error)throw error;if(!data)throw new Error('No data returned');
-    if(openFacilityId!==String(fid))return;
-    $('report-body').innerHTML=buildReportHtml(data);
-    const f=data.facility||data;const s=scoreOf(f);lastReport=f;if(lastReport.facility_id==null)lastReport.facility_id=String(fid);
-    document.title=(f.facility_name||'Facility')+' — '+(s==null?'not scored':s.toFixed(1)+' · '+BAND_WORD[labelOf(f)])+' | ForThePatient.org';
-  }catch(e){derr('facility_detail failed',e);$('report-body').innerHTML='<div class="section error"><h2>Could not load this report</h2><p class="note">'+escapeHtml(e.message||'')+'</p><button class="btn primary" type="button" data-retry="'+escapeHtml(fid)+'">Try again</button></div>'}
-}
-function pctWhole(p){const n=Math.round(Number(p));return Math.max(1,Math.min(99,n))}
-function pctBand(p){if(p>=80)return{word:'near the top',tone:'good'};if(p>=60)return{word:'in the upper range',tone:'good'};if(p>=40)return{word:'around the middle',tone:'mid'};if(p>=20)return{word:'in the lower range',tone:'low'};return{word:'near the bottom',tone:'low'}}
-function scoreBand(s){if(s==null)return{word:'',tone:'mid'};if(s>=7.5)return{word:'a strong quality record',tone:'good'};if(s>=6)return{word:'an above-average quality record',tone:'good'};if(s>=4.5)return{word:'a middle-of-the-pack quality record',tone:'mid'};if(s>=3)return{word:'a below-average quality record',tone:'low'};return{word:'a weak quality record',tone:'low'}}
-function peerNoun(t){const m={hospital:'hospitals',nursing_home:'nursing homes',dialysis:'dialysis centers',home_health:'home-health agencies',hospice:'hospices',irf:'rehab facilities',ltch:'long-term care hospitals'};return m[t]||'facilities'}
-// TRANSLATE-1, carried: the plain-language reading. Order: flag → quality → proximity.
-function buildPatientSummary(f){
-  if(!f)return'';
-  const score=scoreOf(f),cls=labelOf(f),unrated=(score==null)||cls==='Unrated',flagged=!!f.has_active_enforcement,sev=normSev(f.enforcement_severity);
-  const rawPct=(f.state_percentile==null)?null:Number(f.state_percentile),hasPct=(rawPct!=null&&!isNaN(rawPct));
-  const sName=stateName(f.state),peers=peerNoun(f.facility_type);
-  const parts=[];
-  if(flagged){const sevWord=sev?SEV_WORD[sev]:null;
-    if(sev&&SEV_RANK[sev]>=3)parts.push('This facility is currently under active Medicare enforcement for '+(sevWord?escapeHtml(sevWord)+'-severity ':'')+'safety problems. If you have other options nearby, they may be the safer choice. If this is your only option, ask about recent improvements and know your rights as a patient.');
-    else parts.push('This facility has a current, unresolved CMS survey finding on record'+(sevWord?' ('+escapeHtml(sevWord)+' severity)':'')+'. It is worth asking the facility what has been done to address it.');}
-  if(unrated)parts.push('There isn\u2019t enough public Medicare data to give this facility a quality score yet, so it is shown as not scored. That is not a mark against it \u2014 it means the data needed to rate it isn\u2019t available.');
-  else{const sbd=scoreBand(score);let sentence=(flagged?'Setting the enforcement flag aside, its overall quality score is':'Its overall quality score is')+' '+score.toFixed(1)+' out of 10 \u2014 '+sbd.word+'.';
-    if(hasPct){const w=pctWhole(rawPct),band=pctBand(rawPct);sentence+=' That places it '+band.word+' \u2014 better than about '+w+'%'+(sName?(' of '+escapeHtml(sName)+' '+peers):(' of '+peers+' in its state'))+'.'}
-    else sentence+=' There are too few comparable '+peers+(sName?(' in '+escapeHtml(sName)):'')+' to rank it against its peers.';
-    parts.push(sentence)}
-  if(origin&&origin.kind==='geo'&&f.latitude!=null&&f.longitude!=null){const mi=haversineMiles(origin.lat,origin.lng,Number(f.latitude),Number(f.longitude));if(isFinite(mi)){const miStr=mi<10?mi.toFixed(1):String(Math.round(mi));parts.push('It is about '+miStr+' mile'+((miStr==='1'||miStr==='1.0')?'':'s')+' from your current location.')}}
-  return'<div class="summary'+(flagged?' tone-flag':'')+'">'+parts.map(p=>'<p>'+p+'</p>').join('')+'</div>';
-}
-// ENF-VIZ, carried: banner + survey history (collapsed by default). Gloss first when present.
-let enfSeq=0;
-function buildEnforcementHtml(f,hist){
-  const flagged=!!f.has_active_enforcement,sev=normSev(f.enforcement_severity),rows=Array.isArray(hist)?hist:[];
-  if(!flagged&&!sev&&!rows.length)return'<p class="note">No CMS survey findings on record for this facility.</p>';
-  let banner='';
-  if(flagged&&sev)banner='<div class="enf-banner">'+icon('warn')+'<div><b>Under active enforcement — '+escapeHtml(SEV_WORD[sev])+'</b><p>CMS has a current, unresolved survey finding on record for this facility. Recent findings are marked Current below.</p></div></div>';
-  else if(!flagged&&(sev||rows.length))banner='<div class="enf-banner expired">'+icon('clock')+'<div><b>No active enforcement</b><p>'+(sev?'A past finding (severity: '+escapeHtml(SEV_WORD[sev])+') has since expired. ':'')+'Any items below are historical and no longer affect the score.</p></div></div>';
-  let histHtml='';
-  if(rows.length){
-    const sorted=rows.slice().sort((a,b)=>String(b.survey_date||'').localeCompare(String(a.survey_date||'')));
-    const render=r=>{const d=r.survey_date?String(r.survey_date).slice(0,10):'';const lvl=LVL_WORD[(r.deficiency_level||r.severity||'').toLowerCase()]||'minor';const lvlLabel=lvl==='critical'?'Immediate jeopardy':lvl==='significant'?'Condition-level':'Standard';const active=!!r.is_active;
-      const text=r.plain_summary||r.deficiency_description;
-      return'<div class="finding"><div class="top"><span>'+escapeHtml(d)+'</span><span class="lvl '+lvl+'">'+lvlLabel+'</span><span class="'+(active?'cur':'res')+'">'+(active?'Current':'Resolved')+'</span>'+(r.deficiency_tag?'<span>Tag '+escapeHtml(String(r.deficiency_tag))+'</span>':'')+'</div>'+(text?'<p class="desc">'+escapeHtml(String(text))+'</p>':'')+'</div>'};
-    const n=sorted.length,noun=n===1?'survey finding':'survey findings',pid='enf-panel-'+(++enfSeq);
-    histHtml='<button class="disc-btn" type="button" aria-expanded="false" aria-controls="'+pid+'" data-disc="'+pid+'"><span>Show '+n+' '+noun+'</span>'+icon('chev')+'</button><div class="disc-panel" id="'+pid+'" hidden>'+sorted.map(render).join('')+'<p class="source">Source: CMS survey deficiency records (QCOR). Findings linger on the score after the survey date, then expire.</p></div>';
-  }
-  return banner+histHtml;
-}
-// B-FLAG-SCOPE (D148), carried: the demoted, neutral payment line.
-function buildPaymentPenaltyHtml(f){
-  if(!f||!truthy(f.has_payment_penalty))return'';
-  const detail=f.payment_penalty_detail?String(f.payment_penalty_detail):'Medicare reduced this hospital\u2019s payments under a readmissions (HRRP) or hospital-acquired-condition (HAC) program. These are routine Medicare payment adjustments and do not, on their own, indicate an immediate safety problem.';
-  return'<div class="section"><h2>Medicare payment adjustments</h2><p class="note">'+escapeHtml(detail)+'</p></div>';
-}
-function buildReportHtml(payload){
-  const f=payload.facility||payload,comps=payload.components||[],enf=payload.enforcement||[],hospEnf=payload.hospital_enforcement||[];
-  const lbl=labelOf(f);
-  const badges=[];if(truthy(f.teaching_status))badges.push('Teaching');if(truthy(f.has_cardiac_cath_lab))badges.push('Cardiac cath');if(truthy(f.has_cardiac_surgery))badges.push('Cardiac surgery');if(truthy(f.nicu_level))badges.push('NICU');if(truthy(f.has_trauma_center))badges.push('Trauma center');if(truthy(f.has_burn_unit))badges.push('Burn unit');if(truthy(f.has_organ_transplant))badges.push('Transplant');if(truthy(f.has_mri))badges.push('MRI');if(f.case_mix_index!=null)badges.push('CMI '+Number(f.case_mix_index).toFixed(2));
-  const hasCoords=f.latitude!=null&&f.longitude!=null;
-  const addr=[(f.address?'<span>'+icon('pin')+' '+escapeHtml(f.address)+(f.city?', ':'')+escapeHtml(f.city||'')+(f.state?', ':'')+escapeHtml(f.state||'')+' '+escapeHtml(f.zip_code||'')+'</span>':''),(f.phone?'<a href="tel:'+escapeHtml(String(f.phone).replace(/[^\d+]/g,''))+'">'+icon('phone')+' '+escapeHtml(f.phone)+'</a>':''),(hasCoords?'<a href="https://maps.google.com/?q='+encodeURIComponent(Number(f.latitude)+','+Number(f.longitude))+'" target="_blank" rel="noopener noreferrer">'+icon('directions')+' Directions</a>':'')].filter(Boolean).join('');
-  const compHtml=comps.length?comps.slice().sort((a,b)=>(a.component_order||0)-(b.component_order||0)).map(c=>{const cs=c.component_score!=null?Number(c.component_score):null;const pct=cs!=null?Math.max(0,Math.min(100,cs*10)):0;const b=cs==null?'unrated':cs>=7.5?'exceptional':cs>=6?'above':cs>=4.5?'average':cs>=3?'below':'poor';return'<div class="comp"><span class="cn">'+escapeHtml(c.component_name||'')+'</span><span class="cs">'+(cs==null?'—':cs.toFixed(1))+'</span><div class="bar"><i class="band-'+b+'" style="width:'+pct+'%"></i></div></div>'}).join(''):'<p class="note">No component data.</p>';
-  const penHtml=enf.length?'<div class="section"><h2>Regulatory actions ('+enf.length+')</h2>'+enf.slice(0,8).map(e=>'<div class="pen"><span>'+escapeHtml(e.penalty_type||'Penalty')+(e.amount?' · $'+Number(e.amount).toLocaleString():'')+'</span><span>'+escapeHtml(e.penalty_date?String(e.penalty_date).slice(0,10):'')+'</span></div>').join('')+(enf.length>8?'<p class="note">+ '+(enf.length-8)+' more on record.</p>':'')+'</div>':'';
-  const stars=f.cms_overall_rating?'<span class="badge">CMS overall '+escapeHtml(String(f.cms_overall_rating))+'/5</span>':'';
-  return'<article class="hero">'+
-    '<div>'+ribbonHtml(f)+'<h1>'+escapeHtml(f.facility_name||'')+'</h1><div class="type-line">'+escapeHtml(TYPE_LABEL[f.facility_type]||f.facility_type||'')+(f.city?' · '+escapeHtml(f.city)+', '+escapeHtml(f.state||''):'')+'</div><p class="verdict">'+escapeHtml(VERDICT[lbl])+(f.has_active_enforcement?' State inspectors found active problems.':'')+'</p></div>'+
-    stampHtml(f,true)+'<div class="postmark">CMS data<br>'+escapeHtml(DATA_VINTAGE)+'</div>'+
-    (badges.length||stars?'<div class="badges">'+stars+badges.map(b=>'<span class="badge">'+escapeHtml(b)+'</span>').join('')+'</div>':'')+
-    (addr?'<div class="addr">'+addr+'</div>':'')+
-    '<div class="actions"><button class="btn primary" type="button" data-share="'+escapeHtml(f.facility_id)+'">'+icon('share')+' Share</button><button class="btn" type="button" data-copy="'+escapeHtml(f.facility_id)+'">'+icon('link')+' Copy link</button></div>'+
-  '</article>'+
-  '<section class="section"><h2>What this means for you</h2>'+buildPatientSummary(f)+'</section>'+
-  '<section class="section"><h2>What inspectors found</h2>'+buildEnforcementHtml(f,hospEnf)+'</section>'+
-  '<section class="section"><h2>How the score is built</h2><p class="note">The score combines these measures, each on the same 1–10 scale (1 weakest, 10 strongest), so you can see where this facility is strong or weak.</p>'+compHtml+'</section>'+
-  penHtml+buildPaymentPenaltyHtml(f)+
-  '<section class="section provenance"><h2>Where this comes from</h2><p>Every number on this page comes from data the facility is required to report to CMS, refreshed as of '+escapeHtml(DATA_VINTAGE)+'. Nothing is self-reported to us and no one we rate pays us. <a href="/methodology">How we score</a> · <a href="/dispute-process">Report an error</a></p></section>';
-}
-function facilityUrl(id){return SITE_URL.replace(/\/$/,'')+location.pathname+'?fid='+encodeURIComponent(id)}
-function shareText(f){const s=scoreOf(f);return(f.facility_name||'')+' — '+(s==null?'not scored':s.toFixed(1)+', '+BAND_WORD[labelOf(f)])+(f.has_active_enforcement?', flagged by state inspectors':'')+'. Data as of '+DATA_VINTAGE+'. ForThePatient.org'}
-function currentReportFacility(){const t=document.querySelector('#report-body .hero h1');return{facility_name:t?t.textContent:'',final_score:null}}
-async function copyLink(id){const url=facilityUrl(id);try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(url);toast('Link copied')}else{prompt('Copy this link',url)}}catch(e){prompt('Copy this link',url)}}   // ⧖#36
-async function share(id,f){const url=facilityUrl(id);const data={title:(f&&f.facility_name?f.facility_name+' — ':'')+'ForThePatient.org',text:f?shareText(f):'',url};if(navigator.share){try{await navigator.share(data)}catch(e){}}else copyLink(id)}
+    function clearStateFilter(){
+        if(!filteredState)return;
+        filteredState=null;
+        updateStateFilterIndicator();
+        haptic(10);
+        if(currentViewMode==='facility'){fetchInView()}
+        pushUrlState(true);
+    }
+    function wireStateFilterBadge(){
+        const badge=document.getElementById('state-filter-badge');
+        if(badge&&!badge._wired){badge._wired=true;badge.addEventListener('click',clearStateFilter)}
+        const pill=document.getElementById('sheet-state-pill');
+        if(pill&&!pill._wired){pill._wired=true;pill.addEventListener('click',clearStateFilter)}
+    }
 
-// ── Name search (search_facilities_by_name, Invariant #6) ───────────────────
-function renderNameResults(rows){
-  const el=$('name-results'),input=$('name-search');searchRows=rows;
-  if(!rows.length){el.innerHTML='<div class="name-result"><span class="nr-meta">No matches. Try fewer words.</span></div>'}
-  else el.innerHTML=rows.map(r=>{const lbl=labelOf(r),band=BAND[lbl],s=scoreOf(r);return'<button class="name-result" type="button" role="option" data-open="'+escapeHtml(r.facility_id)+'"><span class="nr-name">'+escapeHtml(r.facility_name||'')+'</span><span class="nr-score '+(band==='unrated'?'unrated':'band-'+band)+'">'+(s==null?'—':s.toFixed(1))+'</span><span class="nr-meta">'+escapeHtml(TYPE_LABEL[r.facility_type]||'')+' · '+escapeHtml(r.city||'')+(r.city&&r.state?', ':'')+escapeHtml(r.state||'')+' · '+escapeHtml(BAND_WORD[lbl])+'</span></button>'}).join('');
-  el.hidden=false;input.setAttribute('aria-expanded','true');
-}
-function closeNameResults(){const el=$('name-results');if(el)el.hidden=true;$('name-search').setAttribute('aria-expanded','false')}
-function wireNameSearch(){
-  const input=$('name-search'),results=$('name-results'),clear=$('name-clear');let kb=-1;
-  const run=debounce(async()=>{const q=input.value.trim();clear.hidden=!q;if(q.length<2){closeNameResults();return}if(!isOnline)return;
-    try{const{data,error}=await sb.rpc('search_facilities_by_name',{p_query:q,p_limit:12});if(error)throw error;renderNameResults(data||[]);kb=-1}catch(e){derr('search failed',e)}},250);
-  input.addEventListener('input',run);
-  input.addEventListener('focus',()=>{if(results.children.length&&input.value.trim().length>=2){results.hidden=false;input.setAttribute('aria-expanded','true')}});
-  input.addEventListener('keydown',e=>{const items=results.querySelectorAll('.name-result[data-open]');
-    if(e.key==='ArrowDown'){e.preventDefault();kb=Math.min(kb+1,items.length-1)}else if(e.key==='ArrowUp'){e.preventDefault();kb=Math.max(kb-1,-1)}
-    else if(e.key==='Enter'&&kb>=0&&items[kb]){e.preventDefault();items[kb].click();return}else if(e.key==='Escape'){closeNameResults();return}else return;
-    items.forEach((el,i)=>{el.classList.toggle('kb-active',i===kb);if(i===kb)el.scrollIntoView({block:'nearest'})})});
-  clear.addEventListener('click',()=>{input.value='';clear.hidden=true;closeNameResults();input.focus()});
-  document.addEventListener('click',e=>{if(!e.target.closest('.search-row'))closeNameResults()});
-}
+    async function fetchInView(){
+        if(!map||!isOnline)return;
+        const c=map.getCenter();
+        const types=Array.from(activeTypes);
+        // When state-filtered, anchor the radius search on the state centroid
+        // (the map view might be off-center) and use a generous radius so we
+        // capture facilities anywhere in that state. Out-of-state rows are
+        // dropped client-side below.
+        let centerLat=c.lat,centerLng=c.lng,radius=getViewportRadiusMiles();
+        if(filteredState&&STATE_BY_ABBR[filteredState]){
+            const si=STATE_BY_ABBR[filteredState];
+            centerLat=si.lat;centerLng=si.lng;
+            radius=Math.max(radius,500);
+        }
+        dlog('fetchInView: center=('+centerLat.toFixed(4)+','+centerLng.toFixed(4)+'), radius='+radius+'mi, types=['+types.join(',')+'], zoom='+map.getZoom()+', state='+(filteredState||'-'));
+        if(!types.length){facilityLayer.clearLayers();stateFacilityLayer.clearLayers();currentFacilities=[];updateStats([]);if(isMobile)showSheetGuide('no-types');showEmptyState('no-types');return}
+        const params={p_lat:centerLat,p_lng:centerLng,p_radius_miles:radius,p_types:types,p_min_score:null,p_require_nicu:!!activeSpecialties.nicu,p_require_cath:!!activeSpecialties.cath,p_require_trauma:!!activeSpecialties.trauma,p_require_teaching:!!activeSpecialties.teaching,p_require_er:!!activeSpecialties.er,p_limit:5000};
+        dlog('RPC params:',JSON.stringify(params));
+        showLoading(true);
+        try{if(inflightController)inflightController.abort();inflightController=new AbortController();
+        const{data,error}=await sb.rpc('nearby_facilities',params);if(error)throw error;
+        let rows=data||[];
+        const rawCount=rows.length;
+        if(filteredState)rows=rows.filter(r=>r.state===filteredState);
+        currentFacilities=rows;
+        dlog('RPC returned '+rawCount+' rows, '+currentFacilities.length+' after state filter');
+        if(currentFacilities.length>0){const tc={};currentFacilities.forEach(f=>{tc[f.facility_type]=(tc[f.facility_type]||0)+1});dlog('Type breakdown:',JSON.stringify(tc))}
+        const vis=visibleFacilities();
+        renderMarkers(vis);updateStats(vis);
+        if(isMobile)renderSheetList();
+        const ov=document.getElementById('map-empty-overlay');if(ov&&vis.length>0)ov.remove();
+        if(!currentFacilities.length)showEmptyState('no-results');
+        else if(!vis.length&&!isMobile)showEmptyState('no-enf');
+        }catch(e){if(e.name!=='AbortError'){derr('RPC failed:',e);showErrorState(e)}}finally{showLoading(false)}
+    }
 
-// ── Theme (Invariant #12) ───────────────────────────────────────────────────
-function applyTheme(t){
-  currentTheme=t==='dark'?'dark':'light';
-  document.documentElement.setAttribute('data-theme',currentTheme);
-  try{localStorage.setItem('theme',currentTheme)}catch(e){}
-  const b=$('theme-toggle-btn');b.setAttribute('aria-checked',String(currentTheme==='dark'));b.setAttribute('aria-pressed',String(currentTheme==='dark'));b.innerHTML=icon(currentTheme==='dark'?'sun':'moon');b.setAttribute('aria-label',currentTheme==='dark'?'Light mode':'Dark mode');
-  document.querySelector('meta[name="theme-color"]').content=currentTheme==='dark'?'#1B2838':'#CFE3F0';
-  if(map&&tileLayer){map.removeLayer(tileLayer);tileLayer=L.tileLayer(tilesFor(currentTheme),{attribution:'&copy; CARTO &middot; CMS public data',subdomains:'abcd',maxZoom:20}).addTo(map);tileLayer.bringToBack()}
-  pushUrlState(true);
-}
+    function renderMarkers(facs){
+        // CAP-VIZ (C3-NOCLUSTER): facilities are NEVER clustered. Every facility is
+        // its own .ftp-dot, at every zoom. The ONLY remaining clusters are the
+        // national state bubbles (renderStateBubbles, zoom < 7). The state
+        // drill-down keeps a slightly larger/brighter dot for legibility, but that
+        // is a styling variant — both modes are un-clustered individual markers.
+        const stateMode=!!(filteredState&&STATE_BY_ABBR[filteredState]);
+        facilityLayer.clearLayers();stateFacilityLayer.clearLayers();
+        const baseDs=isMobile?14:12;
+        const ds=stateMode?(isMobile?18:16):baseDs;   // larger/more visible in state mode
+        const z=map?map.getZoom():STATE_ZOOM;
+        const markers=facs.map(f=>{if(f.latitude==null||f.longitude==null)return null;
+        const color=classColor(f.score_classification);
+        const sev=f.has_active_enforcement?normSev(f.enforcement_severity):null;
+        // The RED severity ring always shows for CRITICAL/SEVERE; the lighter-red
+        // MODERATE/MINOR rings show in state drill-down (whole state laid out) or at
+        // closer zooms, so a dense metro view of thousands of dots stays readable.
+        const showRing=sev&&(stateMode||SEV_RANK[sev]>=3||z>=11);
+        const dotCls=(stateMode?'ftp-dot ftp-statedot':'ftp-dot')+((f.score_classification||'Unrated')==='Unrated'?' unrated':'');
+        let html,iconW=ds,anchor=ds/2;
+        if(showRing){const pad=SEV_RANK[sev]>=3?7:5;iconW=ds+pad*2;anchor=iconW/2;
+            html='<div class="ftp-flag'+(stateMode?' statedot-flag':'')+'" style="width:'+iconW+'px;height:'+iconW+'px"><span class="enf-ring sev-'+SEV_WORD[sev]+'"></span><div class="'+dotCls+'" style="background:'+color+';width:'+ds+'px;height:'+ds+'px"></div></div>';}
+        else html='<div class="'+dotCls+'" style="background:'+color+';width:'+ds+'px;height:'+ds+'px"></div>';
+        const icon=L.divIcon({className:'',html,iconSize:[iconW,iconW],iconAnchor:[anchor,anchor]});
+        const m=L.marker([f.latitude,f.longitude],{icon,_classification:f.score_classification||'Unrated',_facilityId:f.facility_id});
+        if(isMobile)m.on('click',()=>openFacilityDetail(f.facility_id));
+        else{m.bindPopup(buildPopup(f),{maxWidth:240});m.on('click',()=>openFacilityDetail(f.facility_id))}
+        return m}).filter(Boolean);
+        dlog('renderMarkers:',markers.length,stateMode?'(state dots)':'(individual dots)');
+        const layer=stateMode?stateFacilityLayer:facilityLayer;
+        markers.forEach(m=>layer.addLayer(m));
+    }
 
-// ── Wiring (delegated; no inline handlers) ──────────────────────────────────
-function wire(){
-  document.addEventListener('click',e=>{
-    const t=e.target.closest('[data-open],[data-compare],[data-uncompare],[data-journey],[data-radius],[data-type],[data-cap],[data-act],[data-share],[data-copy],[data-disc],[data-retry],#show-more,#flag-only,#use-location,#report-back,#compare-back,#compare-clear,#tray-go,#search-jump,#theme-toggle-btn');
-    if(!t)return;
-    if(t.dataset.open!=null){e.preventDefault();closeNameResults();openFacility(t.dataset.open);return}
-    if(t.dataset.compare!=null){toggleCompare(t.dataset.compare);return}
-    if(t.dataset.uncompare!=null){toggleCompare(t.dataset.uncompare);return}
-    if(t.dataset.journey){setJourney(t.dataset.journey);return}
-    if(t.dataset.radius&&t.dataset.act!=='widen'){setRadius(Number(t.dataset.radius));return}
-    if(t.dataset.type){toggleType(t.dataset.type);return}
-    if(t.dataset.cap){toggleCap(t.dataset.cap);return}
-    if(t.dataset.share!=null){const f=lastReport&&String(lastReport.facility_id)===t.dataset.share?lastReport:null;share(t.dataset.share,f);return}
-    if(t.dataset.copy!=null){copyLink(t.dataset.copy);return}
-    if(t.dataset.disc){const p=$(t.dataset.disc);if(!p)return;const open=p.hidden;p.hidden=!open;t.setAttribute('aria-expanded',String(open));const n=p.querySelectorAll('.finding').length;t.querySelector('span').textContent=open?'Hide '+(n===1?'survey finding':'survey findings'):'Show '+n+' '+(n===1?'survey finding':'survey findings');return}
-    if(t.dataset.retry){openFacility(t.dataset.retry);return}
-    if(t.dataset.act){const a=t.dataset.act;if(a==='location')useMyLocation();else if(a==='widen')setRadius(Number(t.dataset.radius));else if(a==='unflag')toggleFlagOnly();else if(a==='clearcaps'){CAPABILITIES.forEach(c=>activeCaps[c.key]=false);syncControls();fetchFeed()}else if(a==='retry')fetchFeed();return}
-    if(t.id==='show-more'){shownCount+=PAGE;renderFeed();return}
-    if(t.id==='flag-only'){toggleFlagOnly();return}
-    if(t.id==='use-location'){useMyLocation();return}
-    if(t.id==='report-back'||t.id==='compare-back'){goHome();return}
-    if(t.id==='compare-clear'){compare=[];renderTray();goHome();return}
-    if(t.id==='tray-go'){showCompare();return}
-    if(t.id==='search-jump'){if(view!=='home')goHome();setTimeout(()=>{const i=$('name-search');i.scrollIntoView({block:'center'});i.focus()},50);return}
-    if(t.id==='theme-toggle-btn'){applyTheme(currentTheme==='dark'?'light':'dark');return}
-  });
-  $('state-select').addEventListener('change',e=>pickState(e.target.value));
-  $('map-section').addEventListener('toggle',e=>{if(e.target.open){ensureMap();setTimeout(()=>map&&map.invalidateSize(),60)}});
-  window.addEventListener('popstate',()=>{const s=getUrlState();if(s.fid)openFacility(s.fid,true);else if(view!=='home'){openFacilityId=null;setView('home')}});
-  window.addEventListener('resize',debounce(syncMapLayout,150));
-  window.addEventListener('offline',()=>{isOnline=false;toast('You are offline')});
-  window.addEventListener('online',()=>{isOnline=true;if(view==='home'&&!currentFacilities.length)fetchFeed()});
-  document.addEventListener('keydown',e=>{
-    if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&!e.target.closest('input,select,textarea')){e.preventDefault();const i=$('name-search');i.scrollIntoView({block:'center'});i.focus()}
-    if(e.key==='Escape'){if(!$('name-results').hidden)closeNameResults();else if(view!=='home')goHome()}
-  });
-  wireNameSearch();
-}
-// The report keeps the last-loaded facility so Share text renders from the same object as the hero (⧖Inv #47).
-let lastReport=null;
+    function buildPopup(f){const s=f.final_score!=null?f.final_score.toFixed(1):'—';const sev=f.has_active_enforcement?normSev(f.enforcement_severity):null;const enfLine=sev?'<br><span style="display:inline-block;margin-top:4px;font-size:11px;font-weight:600;color:#C0392B">'+icon('alert')+' Active enforcement · '+escapeHtml(sev.charAt(0)+sev.slice(1).toLowerCase())+'</span>':'';return'<div><strong>'+escapeHtml(f.facility_name||'')+'</strong><br><span style="color:var(--text-secondary);font-size:11px">'+escapeHtml(TYPE_LABEL[f.facility_type]||'')+'</span><br><span style="display:inline-block;padding:2px 8px;margin-top:4px;border-radius:10px;font-size:11px;font-weight:600;background:'+classColor(f.score_classification)+';color:var(--band-text)">'+s+' · '+escapeHtml(f.score_classification||'Unrated')+'</span>'+enfLine+'</div>'}
+    function updateStats(rows){const sc=rows.filter(r=>r.final_score!=null);const avg=sc.length>0?(sc.reduce((s,r)=>s+r.final_score,0)/sc.length).toFixed(1):'—';let lbl=activeTypeNoun()+' nearby';if(filteredState&&STATE_BY_ABBR[filteredState])lbl=activeTypeNoun()+' in '+STATE_BY_ABBR[filteredState].n;setStats(rows.length,avg,lbl)}
 
-// ── Boot ────────────────────────────────────────────────────────────────────
-window.addEventListener('load',()=>{
-  const u=getUrlState();
-  const saved=u.theme||(function(){try{return localStorage.getItem('theme')}catch(e){return null}})()||'light';
-  currentTheme=saved==='dark'?'dark':'light';
-  document.documentElement.setAttribute('data-theme',currentTheme);
-  const b=$('theme-toggle-btn');b.setAttribute('aria-checked',String(currentTheme==='dark'));b.innerHTML=icon(currentTheme==='dark'?'sun':'moon');
-  $('status-line').textContent=STATUS_STRING;
-  $('vintage-line').textContent='Data as of '+DATA_VINTAGE+'. Counts and scores change with every refresh; see the methodology for the exact vintage.';
-  if(u.journey&&JOURNEYS.some(j=>j.key===u.journey)){journey=u.journey;activeTypes=new Set(JOURNEYS.find(j=>j.key===u.journey).types)}
-  else if(u.types&&u.types.length){journey=null;activeTypes=new Set(u.types)}
-  if(u.r&&RADII.includes(u.r))radius=u.r;
-  flagOnly=!!u.flag;
-  buildControls();wire();renderTray();
-  if(u.state&&STATE_BY_ABBR[u.state])origin={lat:STATE_BY_ABBR[u.state].lat,lng:STATE_BY_ABBR[u.state].lng,kind:'state',state:u.state};
-  else if(u.lat&&u.lng)origin={lat:u.lat,lng:u.lng,kind:'url'};
-  syncControls();
-  if(u.fid)openFacility(u.fid,true);
-  if(origin)fetchFeed();
-  else if(navigator.geolocation){
-    setFeedBusy(true);
-    navigator.geolocation.getCurrentPosition(pos=>{origin={lat:pos.coords.latitude,lng:pos.coords.longitude,kind:'geo'};syncControls();pushUrlState(true);fetchFeed();renderUserDot()},
-      ()=>{setFeedBusy(false);renderEmpty('no-origin')},{timeout:6000,maximumAge:120000});   // Invariant #11: 6s, silent fallback
-    setTimeout(()=>{if(!origin&&!currentFacilities.length){setFeedBusy(false);renderEmpty('no-origin')}},7000);
-  }else renderEmpty('no-origin');
-  syncMapLayout();
-});
-})();
+    function showEmptyState(reason){const el=document.getElementById('map-empty-overlay');if(el)el.remove();if(isMobile)return;
+        if(reason==='no-enf'){const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';o.innerHTML=''+icon('flag')+'<h4>No flagged facilities in view</h4><p>None of the facilities here are under recent CMS enforcement. Turn off the filter to see all of them, or move the map.</p><button class="clear-btn" type="button" onclick="setEnforcementOnly(false)">Show all facilities</button>';document.getElementById('map-page').appendChild(o);return}
+        if(reason==='no-cap'){const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';o.innerHTML=''+icon('checklist')+'<h4>No facilities match every capability</h4><p>None of the facilities in view have all the capabilities you selected. Remove a requirement or move the map.</p><button class="clear-btn" type="button" onclick="clearCapabilities()">Clear capabilities</button>';document.getElementById('map-page').appendChild(o);return}
+        if(currentFacilities.length>0)return;const o=document.createElement('div');o.id='map-empty-overlay';o.className='empty-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';if(reason==='no-types')o.innerHTML=''+icon('filter')+'<h4>No types selected</h4><p>Enable at least one facility type.</p>';else if(filteredState&&STATE_BY_ABBR[filteredState]){const typeNames=Array.from(activeTypes).map(t=>TYPE_LABEL[t]||t).join(', ');o.innerHTML=''+icon('search')+'<h4>No results in '+escapeHtml(STATE_BY_ABBR[filteredState].n)+'</h4><p>No '+(typeNames||'facilities')+' found in this state. Try adding more facility types or clearing the state filter.</p><button class="clear-btn" type="button" onclick="clearAllFilters()">Clear Filters</button>'}else o.innerHTML=''+icon('search')+'<h4>No facilities found</h4><p>Try zooming out or adjusting filters.</p><button class="clear-btn" type="button" onclick="clearAllFilters()">Clear Filters</button>';document.getElementById('map-page').appendChild(o)}
+    function showErrorState(err){const el=document.getElementById('map-empty-overlay');if(el)el.remove();const o=document.createElement('div');o.id='map-empty-overlay';o.className='error-state';o.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:450;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:30px 40px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:calc(100% - 32px)';o.innerHTML=''+icon('alert')+'<h4>Unable to load</h4><p>'+escapeHtml(err.message||'Error')+'</p><button class="retry-btn" type="button" onclick="onViewChange();this.closest(\'.error-state\').remove()">Retry</button>';document.getElementById('map-page').appendChild(o)}
+    function clearAllFilters(){activeTypes=new Set(FACILITY_TYPES.map(t=>t.value));Object.keys(activeSpecialties).forEach(k=>activeSpecialties[k]=false);enforcementOnly=false;syncEnfFilter();syncCapabilityFilter();filteredState=null;updateStateFilterIndicator();syncChips();const o=document.getElementById('map-empty-overlay');if(o)o.remove();onViewChange()}
+    // ── ENF-FILTER + CAP-VIZ client-side capability filter ──────────────────
+    // visibleFacilities() composes every CLIENT-SIDE view filter over the rows we
+    // already fetched (no refetch): first the "Recent CMS enforcement" toggle, then
+    // any selected client-side capabilities (Cardiac surgery / MRI / Burn / Transplant
+    // / higher-complexity CMI). The five SERVER capabilities (NICU/ER/Cath/Trauma/
+    // Teaching) are already applied by nearby_facilities and need no client pass.
+    function capabilityClientFilter(rows){
+        const active=CAP_CLIENT.filter(c=>activeSpecialties[c.key]);
+        if(!active.length)return rows;
+        return rows.filter(f=>active.every(c=>{
+            // Degrade gracefully: if NONE of the rows even carry this field, the RPC
+            // didn't return it — don't filter on it (never blank the map on a missing
+            // column). We test per-row presence; a row missing the field fails the
+            // requirement (we can't claim a capability we can't see).
+            const v=f[c.field];
+            if(c.cmiMin!=null){const n=Number(v);return isFinite(n)&&n>=c.cmiMin}
+            return truthy(v);
+        }));
+    }
+    // Some columns (has_mri, has_burn_unit, …) may not be returned by
+    // nearby_facilities. If a selected client capability is supported by ZERO rows
+    // in the current result set, we surface it rather than silently emptying the
+    // map: capabilityUnsupported() lists those keys so the UI can note them.
+    function capabilityFieldPresent(field){return currentFacilities.some(f=>Object.prototype.hasOwnProperty.call(f,field)&&f[field]!=null)}
+    function activeClientCapabilities(){return CAP_CLIENT.filter(c=>activeSpecialties[c.key])}
+    function capabilityCount(){return CAPABILITIES.reduce((n,c)=>n+(activeSpecialties[c.key]?1:0),0)}
+    function visibleFacilities(){
+        let rows=enforcementOnly?currentFacilities.filter(f=>!!f.has_active_enforcement):currentFacilities;
+        rows=capabilityClientFilter(rows);
+        return rows;
+    }
+    function syncEnfFilter(){
+        const d=document.getElementById('enf-filter-chip');
+        if(d)d.setAttribute('aria-pressed',enforcementOnly?'true':'false');
+        const m=document.getElementById('sheet-enf-toggle');
+        if(m)m.setAttribute('aria-pressed',enforcementOnly?'true':'false');
+    }
+    function setEnforcementOnly(on){
+        enforcementOnly=!!on;syncEnfFilter();haptic(10);
+        // Re-render in place from the rows we already have.
+        if(currentViewMode==='facility'){
+            const vis=visibleFacilities();
+            renderMarkers(vis);updateStats(vis);
+            if(isMobile)renderSheetList();
+            if(!vis.length&&currentFacilities.length){if(!isMobile)showEmptyState('no-enf')}
+            else{const ov=document.getElementById('map-empty-overlay');if(ov)ov.remove()}
+        }
+        pushUrlState(true);
+    }
+    function toggleEnforcementOnly(){setEnforcementOnly(!enforcementOnly)}
+    function wireEnfFilter(){
+        const d=document.getElementById('enf-filter-chip');
+        if(d&&!d._wired){d._wired=true;d.addEventListener('click',toggleEnforcementOnly)}
+        const m=document.getElementById('sheet-enf-toggle');
+        if(m&&!m._wired){m._wired=true;m.addEventListener('click',toggleEnforcementOnly)}
+        syncEnfFilter();
+    }
+
+    // ── CAP-VIZ: the "Capabilities" filter ─────────────────────────────────
+    // One control on each surface lets a patient require the services their
+    // condition needs. The five SERVER capabilities (NICU/ER/Cath/Trauma/Teaching)
+    // change the nearby_facilities query (re-fetch); the CLIENT capabilities
+    // (Cardiac surgery/MRI/Burn/Transplant/higher-complexity) filter rows we already
+    // have (re-render in place). We track which keys are server-vs-client so toggling
+    // a client key never costs a network round-trip.
+    function applyCapabilityChange(key){
+        const isServer=CAP_SERVER_KEYS.indexOf(key)!==-1;
+        haptic(10);
+        syncCapabilityFilter();
+        pushUrlState(true);
+        if(isServer){
+            // server param changed → re-query
+            if(currentViewMode==='facility')fetchInView();
+        }else{
+            // client capability → re-render from rows in hand
+            if(currentViewMode==='facility'){
+                const vis=visibleFacilities();
+                renderMarkers(vis);updateStats(vis);
+                if(isMobile)renderSheetList();
+                const ov=document.getElementById('map-empty-overlay');
+                if(!vis.length&&currentFacilities.length){if(!isMobile)showEmptyState('no-cap')}
+                else if(ov)ov.remove();
+            }
+        }
+    }
+    function toggleCapability(key){activeSpecialties[key]=!activeSpecialties[key];applyCapabilityChange(key)}
+    function clearCapabilities(){CAPABILITIES.forEach(c=>activeSpecialties[c.key]=false);haptic(10);syncCapabilityFilter();pushUrlState(true);if(currentViewMode==='facility')fetchInView()}
+    // Build the desktop dropdown menu + the mobile sheet panel from CAPABILITIES.
+    function capabilityRowsHtml(prefix){
+        return CAPABILITIES.map(c=>{
+            const on=!!activeSpecialties[c.key];
+            return'<button class="cap-opt'+(on?' on':'')+'" type="button" role="menuitemcheckbox" aria-checked="'+(on?'true':'false')+'" data-cap="'+c.key+'" data-prefix="'+prefix+'">'+
+                '<span class="cap-ic">'+icon(c.icon)+'</span>'+
+                '<span class="cap-text"><span class="cap-label">'+escapeHtml(c.label)+'</span><span class="cap-hint">'+escapeHtml(c.hint)+'</span></span>'+
+                '<span class="cap-check" aria-hidden="true">'+icon('check')+'</span>'+
+            '</button>';
+        }).join('');
+    }
+    function buildCapabilityFilter(){
+        const menu=document.getElementById('cap-menu');
+        if(menu)menu.innerHTML='<div class="cap-menu-head">Required capabilities<button class="cap-clear" type="button" id="cap-clear-desktop">Clear</button></div><div class="cap-menu-list" role="menu" aria-label="Required capabilities">'+capabilityRowsHtml('desktop')+'</div><div class="cap-menu-foot">Showing facilities that have <strong>all</strong> selected capabilities. Some apply to hospitals only.</div>';
+        const sheet=document.getElementById('sheet-cap-list');
+        if(sheet)sheet.innerHTML=capabilityRowsHtml('sheet');
+    }
+    function wireCapabilityFilter(){
+        buildCapabilityFilter();
+        const btn=document.getElementById('cap-filter-btn'),menu=document.getElementById('cap-menu');
+        if(btn&&menu&&!btn._wired){btn._wired=true;
+            btn.addEventListener('click',e=>{e.stopPropagation();const open=menu.classList.toggle('open');btn.setAttribute('aria-expanded',open?'true':'false')});
+            document.addEventListener('click',e=>{if(!e.target.closest('#cap-menu')&&!e.target.closest('#cap-filter-btn')){menu.classList.remove('open');btn.setAttribute('aria-expanded','false')}});
+            document.addEventListener('keydown',e=>{if(e.key==='Escape'&&menu.classList.contains('open')){menu.classList.remove('open');btn.setAttribute('aria-expanded','false');btn.focus()}});
+        }
+        // Delegated handlers for option buttons on both surfaces (rebuilt on sync).
+        const onCapClick=e=>{const b=e.target.closest('[data-cap]');if(!b)return;e.preventDefault();toggleCapability(b.dataset.cap)};
+        if(menu&&!menu._wired){menu._wired=true;menu.addEventListener('click',e=>{const cl=e.target.closest('#cap-clear-desktop');if(cl){clearCapabilities();return}onCapClick(e)})}
+        const sheetList=document.getElementById('sheet-cap-list');
+        if(sheetList&&!sheetList._wired){sheetList._wired=true;sheetList.addEventListener('click',onCapClick)}
+        const sheetClear=document.getElementById('sheet-cap-clear');
+        if(sheetClear&&!sheetClear._wired){sheetClear._wired=true;sheetClear.addEventListener('click',clearCapabilities)}
+        syncCapabilityFilter();
+    }
+    function syncCapabilityFilter(){
+        const n=capabilityCount();
+        // Desktop trigger button: show a count badge when any capability is active.
+        const btn=document.getElementById('cap-filter-btn');
+        if(btn){btn.classList.toggle('has-active',n>0);btn.setAttribute('aria-label',n>0?('Capabilities filter ('+n+' selected)'):'Filter by capabilities');
+            const badge=btn.querySelector('.cap-count');if(badge){badge.textContent=n>0?String(n):'';badge.style.display=n>0?'inline-flex':'none'}}
+        // Mobile trigger row badge.
+        const sBadge=document.getElementById('sheet-cap-count');
+        if(sBadge){sBadge.textContent=n>0?String(n):'';sBadge.style.display=n>0?'inline-flex':'none'}
+        // Reflect checked state on every option button without a full rebuild.
+        document.querySelectorAll('[data-cap]').forEach(b=>{const on=!!activeSpecialties[b.dataset.cap];b.classList.toggle('on',on);b.setAttribute('aria-checked',on?'true':'false')});
+    }
+
+    // ── CAP-VIZ (C5-LEGEND): map rating legend ─────────────────────────────
+    // A small, always-on key for the dot colors, top-left of the map under the
+    // search/filter bar. Reads the documented classification palette only.
+    const LEGEND_ITEMS=CLASS_ORDER.map(c=>({label:c}));  // colors resolve via classColor() at build time (⧖D173)
+    function buildLegend(){
+        const el=document.getElementById('map-legend');if(!el)return;
+        const rows=LEGEND_ITEMS.map(i=>'<span class="lg-row"><span class="lg-swatch'+(i.label==='Unrated'?' unrated':'')+'" style="background:'+classColor(i.label)+'"></span>'+escapeHtml(i.label)+'</span>').join('');
+        el.innerHTML='<div class="lg-title">Quality rating</div><div class="lg-rows">'+rows+'</div>'+
+            '<div class="lg-enf"><span class="lg-ring" aria-hidden="true"></span>Red ring = under active CMS survey enforcement (thicker ring = more severe)</div>';
+    }
+    function showLoading(a){const el=document.getElementById('query-loading');if(a)el.classList.add('active');else el.classList.remove('active')}
+
+    async function openFacilityDetail(fid){
+        openFacilityId=fid;pushUrlState(false);document.title='Loading… — ForThePatient';
+        if(isMobile){setSheetContent('detail');document.getElementById('detail-sheet-body').innerHTML=buildSkeletonHtml();const b=document.getElementById('detail-sheet-body');if(b)b.scrollTop=0}
+        else{const p=document.getElementById('info-panel');document.getElementById('facility-info-content').innerHTML=buildSkeletonHtml();p.classList.add('active')}
+        const ov=document.getElementById('map-empty-overlay');if(ov)ov.remove();
+        try{const{data,error}=await sb.rpc('facility_detail',{p_facility_id:fid});if(error)throw error;if(!data)throw new Error('No data');
+        const html=buildFacilityDetailHtml(data);
+        if(isMobile)document.getElementById('detail-sheet-body').innerHTML=html;else document.getElementById('facility-info-content').innerHTML=html;
+        const f=data.facility||data;const s=f.final_score!=null?f.final_score.toFixed(1):'';document.title=(f.facility_name||'Facility')+' — Quality Score'+(s?' '+s:'')+' | ForThePatient';
+        }catch(e){derr('detail failed',e);const eh='<div class="error-state">'+icon('alert')+'<h4>Could not load</h4><p>'+escapeHtml(e.message||'')+'</p><button class="retry-btn" type="button" onclick="openFacilityDetail(\''+escapeHtml(jsq(fid))+'\')">Retry</button></div>';if(isMobile)document.getElementById('detail-sheet-body').innerHTML=eh;else document.getElementById('facility-info-content').innerHTML=eh}
+    }
+
+    function buildSkeletonHtml(){return'<div class="facility-info" style="padding-top:14px"><div style="display:flex;justify-content:flex-end;gap:4px;margin-bottom:8px"><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div><div class="skeleton-block" style="width:32px;height:32px;border-radius:6px"></div></div><div class="skeleton-block skeleton-line w70"></div><div class="skeleton-block skeleton-line w40" style="height:8px;margin-bottom:14px"></div><div style="display:flex;gap:14px;align-items:center;margin-bottom:20px"><div class="skeleton-block skeleton-circle"></div><div style="flex:1"><div class="skeleton-block skeleton-line w50"></div><div class="skeleton-block skeleton-line w40" style="height:8px"></div></div></div><div class="skeleton-block skeleton-line w40" style="height:8px;margin-bottom:14px"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div class="skeleton-block skeleton-line w90"></div><div class="skeleton-block skeleton-bar"></div><div style="margin-top:18px"><div class="skeleton-block skeleton-line w70"></div><div class="skeleton-block skeleton-line w50"></div></div></div>'}
+
+    // ── TRANSLATE-1: plain-language patient summary (S-4) ──────────────────
+    // A calm, second-person reading that synthesizes, in this order:
+    //   (1) is anything wrong here  (enforcement flag — the persona-1 question)
+    //   (2) how good is the quality  (score + classification + state percentile)
+    //   (3) how close is it          (reused "Near me" geolocation, no new math)
+    // It is the LANGUAGE layer over data already on the card — no new RPC, no new
+    // statistic. The same builder feeds the desktop side panel and the mobile
+    // sheet (Invariants #29/#30). Every facility-derived string is escaped (#15).
+    //
+    // Q-40 (percentile phrasing) is resolved as "better than ~X% of peers": that
+    // is the literal definition of a percentile, it never inverts, and it stays
+    // positive for strong facilities. A plain directional cue ("near the bottom"
+    // / "around the middle" / "near the top") carries the gist so a stressed
+    // reader needn't do the arithmetic; the % is supporting detail. NULL is split
+    // into two honest cases and NEVER prints "0th"/"null"/blank: an Unrated
+    // facility ("not enough public data to rate") vs a scored facility with too
+    // few in-state same-type peers to rank ("too few comparable … to rank").
+
+    // Round-half-up to a whole percent for display (avoids "15.6th"); clamps 1..99
+    // so we never say "0%" or "100%" of peers.
+    function pctWhole(p){const n=Math.round(Number(p));return Math.max(1,Math.min(99,n))}
+    // Map a percentile to a plain directional phrase + a tone token (drives accent).
+    function pctBand(p){
+        if(p>=80)return{word:'near the top',tone:'good'};
+        if(p>=60)return{word:'in the upper range',tone:'good'};
+        if(p>=40)return{word:'around the middle',tone:'mid'};
+        if(p>=20)return{word:'in the lower range',tone:'low'};
+        return{word:'near the bottom',tone:'low'};
+    }
+    // Plain reading of the 1-10 score for someone who has never seen the scale.
+    function scoreBand(s){
+        if(s==null)return{word:'',tone:'mid'};
+        if(s>=7.5)return{word:'a strong quality record',tone:'good'};
+        if(s>=6)return{word:'an above-average quality record',tone:'good'};
+        if(s>=4.5)return{word:'a middle-of-the-pack quality record',tone:'mid'};
+        if(s>=3)return{word:'a below-average quality record',tone:'low'};
+        return{word:'a weak quality record',tone:'low'};
+    }
+    function stateName(abbr){const s=STATE_BY_ABBR[abbr];return s?s.n:null}
+    // Type noun for one facility, lowercased and singular-ish, for "… of N.C. hospitals".
+    function peerNoun(t){const m={hospital:'hospitals',nursing_home:'nursing homes',dialysis:'dialysis centers',home_health:'home-health agencies',hospice:'hospices',irf:'rehab facilities',ltch:'long-term care hospitals'};return m[t]||'facilities'}
+
+    function buildPatientSummary(f,hist){
+        if(!f)return'';
+        const score=(f.final_score!=null)?Number(f.final_score):null;
+        const cls=f.score_classification||'Unrated';
+        const unrated=(score==null)||cls==='Unrated';
+        const flagged=!!f.has_active_enforcement;
+        const sev=normSev(f.enforcement_severity);
+        const rawPct=(f.state_percentile==null)?null:Number(f.state_percentile);
+        const hasPct=(rawPct!=null&&!isNaN(rawPct));
+        const sName=stateName(f.state);
+        const peers=peerNoun(f.facility_type);
+
+        const parts=[];   // each entry: {t: text, tone: 'good'|'mid'|'low'|'flag'}
+
+        // (1) Enforcement first — the "is anything wrong here" answer.
+        if(flagged){
+            const sevWord=sev?(sev.charAt(0)+sev.slice(1).toLowerCase()):null;
+            if(sev&&SEV_RANK[sev]>=3){
+                parts.push({t:'This facility is currently under active Medicare enforcement for '+(sevWord?escapeHtml(sevWord.toLowerCase())+'-severity ':'')+'safety problems. If you have other options nearby, they may be the safer choice. If this is your only option, ask about recent improvements and know your rights as a patient.',tone:'flag'});
+            }else{
+                parts.push({t:'This facility has a current, unresolved CMS survey finding on record'+(sevWord?' ('+escapeHtml(sevWord.toLowerCase())+' severity)':'')+'. It is worth asking the facility what has been done to address it.',tone:'flag'});
+            }
+        }
+
+        // (2) Quality reading — score + classification + state percentile.
+        if(unrated){
+            parts.push({t:'There isn\u2019t enough public Medicare data to give this facility a quality score yet, so it is shown as Unrated. That is not a mark against it \u2014 it means the data needed to rate it isn\u2019t available.',tone:'mid'});
+        }else{
+            const sb=scoreBand(score);
+            const lead=flagged?'Setting the enforcement flag aside, its overall quality score is':'Its overall quality score is';
+            let sentence=lead+' '+score.toFixed(1)+' out of 10 \u2014 '+sb.word+'.';
+            // Percentile clause, when we can rank it.
+            if(hasPct){
+                const w=pctWhole(rawPct),band=pctBand(rawPct);
+                const where=sName?(' of '+escapeHtml(sName)+' '+peers):(' of '+peers+' in its state');
+                sentence+=' That places it '+band.word+' \u2014 better than about '+w+'%'+where+'.';
+                parts.push({t:sentence,tone:band.tone});
+            }else{
+                // scored, but no percentile: too few in-state same-type peers to rank.
+                sentence+=' There are too few comparable '+peers+(sName?(' in '+escapeHtml(sName)):'')+' to rank it against its peers.';
+                parts.push({t:sentence,tone:sb.tone});
+            }
+        }
+
+        // (3) Proximity — reuse the existing geolocation/distance, no new math.
+        const o=originForDistance();
+        if(o&&f.latitude!=null&&f.longitude!=null&&userLocation){
+            const mi=haversineMiles(o.lat,o.lng,Number(f.latitude),Number(f.longitude));
+            if(isFinite(mi)){
+                const miStr=mi<10?mi.toFixed(1):String(Math.round(mi));
+                parts.push({t:'It is about '+miStr+' mile'+((miStr==='1'||miStr==='1.0')?'':'s')+' from your current location.',tone:'mid'});
+            }
+        }
+
+        if(!parts.length)return'';
+        // Overall tone: a live flag dominates; otherwise the quality reading leads.
+        const tone=flagged?'flag':(parts[0]?parts[0].tone:'mid');
+        const body=parts.map(p=>'<p class="ps-line">'+p.t+'</p>').join('');
+        return'<div class="patient-summary tone-'+tone+'" role="note" aria-label="Plain-language summary">'+
+            '<div class="ps-eyebrow">'+icon('info')+' What this means for you</div>'+
+            body+
+            '<div class="ps-foot">A plain-language reading of the data below. <a href="/methodology">How we score</a>.</div>'+
+        '</div>';
+    }
+
+    // ── ENF-VIZ: hospital enforcement banner + survey history ──────────────
+    // facility.enforcement_severity is UNGATED here, so it may be a historical
+    // (expired) label when has_active_enforcement is false. Label accordingly.
+    function buildEnforcementHtml(f,hist){
+        const flagged=!!f.has_active_enforcement;
+        const sev=normSev(f.enforcement_severity);
+        const rows=Array.isArray(hist)?hist:[];
+        if(!flagged&&!sev&&!rows.length)return'';
+        let banner='';
+        if(flagged&&sev){
+            const word=sev.charAt(0)+sev.slice(1).toLowerCase();
+            banner='<div class="enf-banner sev-'+SEV_WORD[sev]+'">'+icon('alert')+'<div class="enf-banner-body"><div class="enf-banner-head">Under active enforcement &middot; '+escapeHtml(word)+'</div><div class="enf-banner-sub">CMS has a current, unresolved survey finding on record for this facility. Recent findings are marked <strong>Current</strong> below.</div></div></div>';
+        }else if(!flagged&&(sev||rows.length)){
+            // expired label or only-historical records: do NOT present as current
+            banner='<div class="enf-banner expired">'+icon('history')+'<div class="enf-banner-body"><div class="enf-banner-head">No active enforcement</div><div class="enf-banner-sub">'+(sev?'A past finding (severity: '+escapeHtml((sev.charAt(0)+sev.slice(1).toLowerCase()))+') has since expired. ':'')+'Any items below are historical and no longer affect the score.</div></div></div>';
+        }
+        let histHtml='';
+        if(rows.length){
+            const sorted=rows.slice().sort((a,b)=>String(b.survey_date||'').localeCompare(String(a.survey_date||'')));
+            const render=r=>{
+                const d=r.survey_date?String(r.survey_date).slice(0,10):'';
+                const lvlRaw=(r.deficiency_level||r.severity||'').toLowerCase();
+                const lvl=LVL_WORD[lvlRaw]||'minor';
+                const lvlLabel=lvl==='critical'?'Immediate jeopardy':lvl==='significant'?'Condition-level':'Standard';
+                const active=!!r.is_active;
+                const tag=r.deficiency_tag?'Tag '+escapeHtml(String(r.deficiency_tag)):'';
+                const desc=r.deficiency_description?'<div class="enf-desc">'+escapeHtml(String(r.deficiency_description))+'</div>':'';
+                return'<div class="enf-row"><div class="enf-row-top"><span class="enf-date">'+escapeHtml(d)+'</span><span class="enf-level lvl-'+lvl+'">'+lvlLabel+'</span><span class="enf-status '+(active?'current':'resolved')+'">'+(active?'Current':'Resolved')+'</span>'+(tag?'<span class="enf-tag">'+tag+'</span>':'')+'</div>'+desc+'</div>';
+            };
+            const n=sorted.length;
+            const noun=n===1?'survey finding':'survey findings';
+            // Collapsed by default: NO rows shown until the disclosure is opened.
+            const pid='enf-disc-panel-'+(++enfDiscSeq);
+            const allRows=sorted.map(render).join('');
+            histHtml='<h3 class="section-header">Survey findings ('+n+')</h3>'+
+                '<div class="enf-disclosure"><button class="enf-disc-btn" type="button" aria-expanded="false" aria-controls="'+pid+'" onclick="toggleEnfHistory(this)">'+
+                    ''+icon('chevron-right','ed-ic')+''+
+                    '<span class="ed-label">Show '+n+' '+noun+'</span>'+
+                    '<span class="ed-caret" aria-hidden="true">'+icon('list')+'</span>'+
+                '</button>'+
+                '<div class="enf-disc-panel" id="'+pid+'" hidden><div class="enf-history">'+allRows+'</div>'+
+                '<div class="enf-more">Source: CMS survey deficiency records (QCOR). Findings linger on the score after the survey date, then expire.</div></div></div>';
+        }
+        return banner+histHtml;
+    }
+    let enfDiscSeq=0;
+    function toggleEnfHistory(btn){
+        const id=btn.getAttribute('aria-controls');const panel=id?document.getElementById(id):null;if(!panel)return;
+        const willOpen=panel.hidden;panel.hidden=!willOpen;
+        btn.setAttribute('aria-expanded',willOpen?'true':'false');
+        const label=btn.querySelector('.ed-label');
+        if(label){const total=(panel.querySelectorAll('.enf-row')||[]).length;const noun=total===1?'survey finding':'survey findings';label.textContent=willOpen?('Hide '+noun):('Show '+total+' '+noun);}
+    }
+
+    // B-FLAG-SCOPE (v1.5 / Decision 148): the DEMOTED payment-penalty signal.
+    // Routine Medicare payment penalties (HRRP readmissions / HAC) no longer
+    // trip the red enforcement flag — they are surfaced here as a separate,
+    // neutral, clearly-labeled line so they inform without reading as a safety
+    // problem. Detail-card only (no map/marker change). Uses the existing
+    // neutral text tokens (no new colors, Invariant #18) and escapeHtml (#15).
+    // payment_penalty_detail rides into f via facility_detail's to_jsonb(f.*).
+    function buildPaymentPenaltyHtml(f){
+        if(!f||!truthy(f.has_payment_penalty))return'';
+        const detail=f.payment_penalty_detail?String(f.payment_penalty_detail):
+            'Medicare reduced this hospital\u2019s payments under a readmissions (HRRP) or hospital-acquired-condition (HAC) program. These are routine Medicare payment adjustments and do not, on their own, indicate an immediate safety problem.';
+        return'<div class="payment-penalty-block">'+
+            '<div class="payment-penalty-head">'+icon('payment')+' Medicare payment penalties</div>'+
+            '<div class="payment-penalty-sub">'+escapeHtml(detail)+'</div>'+
+            '</div>';
+    }
+
+    function buildFacilityDetailHtml(payload){
+        const f=payload.facility||payload,comps=payload.components||[],enf=payload.enforcement||[];
+        const hospEnf=payload.hospital_enforcement||[];
+        const score=f.final_score!=null?f.final_score.toFixed(1):'—',cls=f.score_classification||'Unrated',stars=f.cms_overall_rating||null;
+        const compHtml=comps.length===0?'<div class="component-na">No component data</div>':comps.sort((a,b)=>(a.component_order||0)-(b.component_order||0)).map(c=>{const cs=c.component_score!=null?c.component_score.toFixed(1):'—';const fp=c.component_score!=null?Math.max(0,Math.min(100,(c.component_score/10)*100)):0;return'<div><div class="component-row"><div class="component-name">'+escapeHtml(c.component_name||'')+'</div><div class="component-score">'+cs+'</div></div><div class="component-bar"><div class="component-bar-fill" style="width:'+fp+'%;background:'+scoreToBarColor(c.component_score)+'"></div></div></div>'}).join('');
+        const badges=[];if(truthy(f.teaching_status))badges.push('Teaching');if(truthy(f.has_cardiac_cath_lab))badges.push('Cardiac Cath');if(truthy(f.has_cardiac_surgery))badges.push('Cardiac Surgery');if(truthy(f.nicu_level))badges.push('NICU');if(truthy(f.has_trauma_center))badges.push('Trauma Center');if(truthy(f.has_burn_unit))badges.push('Burn Unit');if(truthy(f.has_organ_transplant))badges.push('Transplant');if(truthy(f.has_mri))badges.push('MRI');if(f.case_mix_index!=null)badges.push('CMI '+Number(f.case_mix_index).toFixed(2));
+        const bHtml=badges.length?'<div class="specialty-badges">'+badges.map(b=>'<span class="spec-badge">'+escapeHtml(b)+'</span>').join('')+'</div>':'';
+        const eHtml=enf.length?'<div class="enforcement-block"><div class="enforcement-title">'+icon('flag')+' '+enf.length+' regulatory action'+(enf.length===1?'':'s')+'</div>'+enf.slice(0,5).map(e=>'<div class="enforcement-amt">'+escapeHtml(e.penalty_type||'Penalty')+(e.amount?' · $'+Number(e.amount).toLocaleString():'')+(e.penalty_date?' · '+escapeHtml(String(e.penalty_date).slice(0,10)):'')+'</div>').join('')+(enf.length>5?'<div class="enforcement-amt">+ '+(enf.length-5)+' more</div>':'')+'</div>':'';
+        const cmsLine=stars?'<span class="cms-stars">CMS overall: '+icon('star','star-icon').repeat(Math.round(stars))+' '+stars+'/5</span>':'';
+        const psHtml=buildPatientSummary(f,hospEnf);
+        const enfVizHtml=buildEnforcementHtml(f,hospEnf);
+        const payHtml=buildPaymentPenaltyHtml(f);
+        return'<div class="facility-info"><div class="detail-header-actions"><button class="detail-action-btn" type="button" onclick="copyFacilityLink(\''+escapeHtml(jsq(f.facility_id))+'\')" aria-label="Copy link" title="Copy link">'+icon('link')+'</button><button class="detail-action-btn" type="button" onclick="shareFacility(\''+escapeHtml(jsq(f.facility_id))+'\',\''+escapeHtml(jsq(f.facility_name))+'\')" aria-label="Share" title="Share">'+icon('share')+'</button><button class="detail-action-btn" type="button" data-pin onclick="togglePinPanel()" aria-label="Pin" title="Pin">'+icon('tack')+'</button><button class="detail-action-btn" type="button" onclick="closeFacilityInfo()" aria-label="Close" title="Close">'+icon('close')+'</button></div><div class="facility-header"><h2 class="facility-name">'+escapeHtml(f.facility_name||'')+'</h2><div class="facility-type-line">'+escapeHtml(TYPE_LABEL[f.facility_type]||f.facility_type||'')+'</div><div class="score-block"><div class="score-circle '+(cls==='Unrated'?'unrated':'')+'" style="background:'+classColor(cls)+'">'+score+'</div><div class="score-meta"><span class="classification-badge '+classBadgeClass(cls)+'" style="background:'+classColor(cls)+'">'+escapeHtml(cls)+'</span><span class="score-out-of">FTP score · 1 (weakest) to 10 (strongest)</span>'+cmsLine+'</div></div>'+bHtml+'</div>'+psHtml+'<h3 class="section-header">Component breakdown</h3><p class="section-note">The score combines these measures. Each is shown on the same 1&ndash;10 scale, so you can see where this facility is strong or weak.</p>'+compHtml+eHtml+enfVizHtml+payHtml+'<div class="addr-block">'+(f.address?'<div>'+icon('pin')+''+escapeHtml(f.address||'')+'</div>':'')+'<div style="padding-left:20px">'+escapeHtml(f.city||'')+(f.city?', ':'')+escapeHtml(f.state||'')+' '+escapeHtml(f.zip_code||'')+'</div>'+(f.phone?'<div>'+icon('phone')+''+escapeHtml(f.phone)+'</div>':'')+'</div><a href="https://maps.google.com/?q='+f.latitude+','+f.longitude+'" target="_blank" rel="noopener noreferrer" class="directions-btn">Get Directions</a><div class="print-methodology-url">Methodology: https://forthepatient.org/methodology</div></div>';
+    }
+
+    function closeFacilityInfo(){
+        openFacilityId=null;
+        document.title='For The Patient — Healthcare Quality Map';
+        if(isMobile){setSheetContent('home');setSheetView(sheetView)}
+        else document.getElementById('info-panel').classList.remove('active','pinned');
+        pushUrlState(true);
+    }
+    function copyFacilityLink(id){const url=location.origin+location.pathname+'?fid='+encodeURIComponent(id);navigator.clipboard.writeText(url).then(()=>{const b=document.querySelector('.detail-action-btn[onclick*="copyFacilityLink"]');if(b){b.innerHTML=icon('check');setTimeout(()=>{b.innerHTML=icon('link')},1500)}}).catch(()=>{})}
+    function shareFacility(id,name){const url=location.origin+location.pathname+'?fid='+encodeURIComponent(id);if(navigator.share)navigator.share({title:name+' — Quality Score | ForThePatient',url}).catch(()=>{});else copyFacilityLink(id)}
+    function togglePinPanel(){const p=document.getElementById('info-panel');detailPanelPinned=!detailPanelPinned;p.classList.toggle('pinned',detailPanelPinned);if(detailPanelPinned)p.style.width='';setTimeout(()=>map.invalidateSize(),350)}
+
+    function wireNameSearch(){
+        const input=document.getElementById('name-search'),results=document.getElementById('name-results');if(!input||!results)return;let kbIdx=-1;
+        const search=debounce(async()=>{const q=input.value.trim();if(q.length<2){results.classList.remove('active');input.setAttribute('aria-expanded','false');return}if(!isOnline)return;
+        try{const{data,error}=await sb.rpc('search_facilities_by_name',{p_query:q,p_limit:12});if(error)throw error;renderNameResults(data||[],results);input.setAttribute('aria-expanded','true');kbIdx=-1}catch(e){derr('search failed',e)}},250);
+        input.addEventListener('input',search);
+        input.addEventListener('focus',()=>{if(results.children.length>0){results.classList.add('active');input.setAttribute('aria-expanded','true')}});
+        input.addEventListener('keydown',e=>{const items=results.querySelectorAll('.name-result-item');if(e.key==='ArrowDown'){e.preventDefault();kbIdx=Math.min(kbIdx+1,items.length-1);updateKbActive(items,kbIdx)}else if(e.key==='ArrowUp'){e.preventDefault();kbIdx=Math.max(kbIdx-1,-1);updateKbActive(items,kbIdx)}else if(e.key==='Enter'&&kbIdx>=0&&items[kbIdx]){e.preventDefault();items[kbIdx].click()}else if(e.key==='Escape'){results.classList.remove('active');input.setAttribute('aria-expanded','false')}});
+        document.addEventListener('click',e=>{if(!e.target.closest('.search-compact')){results.classList.remove('active');input.setAttribute('aria-expanded','false')}});
+    }
+    function updateKbActive(items,idx){items.forEach((el,i)=>{el.classList.toggle('kb-active',i===idx);if(i===idx)el.scrollIntoView({block:'nearest'})})}
+    function renderNameResults(rows,el){
+        if(!rows.length){el.innerHTML='<div class="name-result-item"><div class="name-result-meta">No matches</div></div>';el.classList.add('active');return}
+        el.innerHTML=rows.map((r,i)=>{const sc=classColor(r.score_classification),st=r.final_score!=null?r.final_score.toFixed(1):'—';return'<div class="name-result-item" data-id="'+escapeHtml(r.facility_id)+'" data-lat="'+r.latitude+'" data-lng="'+r.longitude+'" role="option"><div class="name-result-name">'+escapeHtml(r.facility_name||'')+'</div><div class="name-result-meta">'+escapeHtml(TYPE_LABEL[r.facility_type]||'')+' · '+escapeHtml(r.city||'')+', '+escapeHtml(r.state||'')+' · <span class="name-result-score" style="background:'+sc+'">'+st+'</span></div></div>'}).join('');
+        el.classList.add('active');
+        el.querySelectorAll('.name-result-item[data-id]').forEach(el=>{el.addEventListener('click',()=>{const lat=parseFloat(el.dataset.lat),lng=parseFloat(el.dataset.lng);if(!isNaN(lat)&&!isNaN(lng))map.setView([lat,lng],14);document.getElementById('name-results').classList.remove('active');document.getElementById('name-search').value='';openFacilityDetail(el.dataset.id)})});
+    }
+
+    function wireResizeHandle(){const h=document.getElementById('resize-handle'),p=document.getElementById('info-panel');if(!h||!p)return;let sx,sw;function md(e){e.preventDefault();sx=e.clientX;sw=p.offsetWidth;document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu)}function mm(e){p.style.width=Math.max(320,Math.min(600,sw+(sx-e.clientX)))+'px'}function mu(){document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu)}h.addEventListener('mousedown',md)}
+
+    function toggleTheme(){currentTheme=currentTheme==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',currentTheme);try{localStorage.setItem('theme',currentTheme)}catch(e){}const btn=document.getElementById('theme-toggle-btn');btn.classList.toggle('active',currentTheme==='dark');btn.setAttribute('aria-checked',currentTheme==='dark');btn.querySelector('.toggle-slider').innerHTML=icon(currentTheme==='dark'?'moon':'sun');document.querySelector('meta[name="theme-color"]').content=currentTheme==='dark'?'#17122A':'#F6F5F1';map.eachLayer(l=>{if(l instanceof L.TileLayer)map.removeLayer(l)});L.tileLayer(tileUrlFor(currentTheme),{attribution:TILE_ATTR,subdomains:'abcd',maxZoom:20}).addTo(map);if(currentViewMode==='facility'&&currentFacilities.length)renderMarkers(visibleFacilities());else if(currentViewMode==='state')renderStateBubbles();buildLegend();pushUrlState(true)}
+
+    // ─── v5.0 mobile home sheet ──────────────────────────────────────────────
+    function buildSheetChips(){
+        const el=document.getElementById('sheet-chips');if(!el)return;el.innerHTML='';
+        FACILITY_TYPES.forEach(t=>{
+            const c=document.createElement('button');
+            c.className='sheet-chip'+(activeTypes.has(t.value)?' on':'');
+            c.dataset.type=t.value;c.type='button';c.setAttribute('role','switch');
+            c.setAttribute('aria-checked',activeTypes.has(t.value));c.setAttribute('aria-label',t.label);
+            c.innerHTML=icon(t.icon)+' '+t.label;
+            c.addEventListener('click',()=>{if(activeTypes.has(t.value))activeTypes.delete(t.value);else activeTypes.add(t.value);haptic(10);syncChips();onViewChange()});
+            el.appendChild(c);
+        });
+    }
+    // ── MOBILE-CLEAN-1 (v5.6): static two-state surface ─────────────────────
+    // setSheetView toggles the mobile home surface between 'map' (static bar only,
+    // map fully visible) and 'list' (sheet covers the map, scrollable list). CSS
+    // does the height/layout off the [data-view] attribute; we only set state and
+    // (in list view) paint the list.
+    // ATTRIB-FIX-2 (v1.7): measure the REAL rendered mobile sheet-bar height and
+    // expose it as --sheet-bar-h, so the map attribution is lifted exactly clear
+    // of the bar in MAP view (the v5.10 fixed 112px was smaller than the real bar
+    // and clipped the tag under the toggle — #24b). The .sheet-bar height is the
+    // same in map and list view (the scrollable list is a separate sibling), so
+    // this can be read in any state. Mobile only; a no-op on desktop. A small
+    // pad keeps a hair of breathing room above the toggle.
+    function syncSheetBarMetrics(){
+        if(!isMobile)return;
+        const bar=document.getElementById('sheet-bar');
+        if(!bar)return;
+        const h=Math.ceil(bar.getBoundingClientRect().height);
+        if(h>0)document.documentElement.style.setProperty('--sheet-bar-h',(h+6)+'px');
+    }
+    function setSheetView(view){
+        sheetView=(view==='list')?'list':'map';
+        const sheet=document.getElementById('detail-sheet');
+        if(sheet)sheet.setAttribute('data-view',sheetView);
+        // ATTRIB-FIX-2: mirror the home view onto <body> so CSS can hide the
+        // map-anchored Leaflet attribution when the List sheet covers the map.
+        document.body.setAttribute('data-sheet-view',sheetView);
+        updateViewToggle();
+        if(isMobile&&sheetMode==='home'&&sheetView==='list')renderSheetList();
+        // Re-measure after layout settles (chip/toggle height can change with
+        // orientation, dynamic type, or a late webfont).
+        requestAnimationFrame(syncSheetBarMetrics);
+        haptic(10);
+    }
+    function wireViewToggle(){
+        const t=document.getElementById('view-toggle');if(!t||t._wired)return;t._wired=true;
+        t.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+            if(sheetMode==='detail')closeFacilityInfo();
+            setSheetView(b.dataset.view==='list'?'list':'map');
+        }));
+    }
+    function updateViewToggle(){
+        const t=document.getElementById('view-toggle');if(!t)return;
+        const listOn=(sheetView==='list');
+        t.querySelectorAll('button').forEach(b=>{const on=(b.dataset.view==='list')===listOn;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on?'true':'false')});
+    }
+    // Wire the sticky detail-overlay Back (→ list) and Close (→ home) buttons.
+    function wireDetailBar(){
+        const back=document.getElementById('sheet-back-btn');
+        if(back&&!back._wired){back._wired=true;back.addEventListener('click',()=>{sheetView='list';closeFacilityInfo()})}
+        const close=document.getElementById('sheet-close-btn');
+        if(close&&!close._wired){close._wired=true;close.addEventListener('click',()=>closeFacilityInfo())}
+    }
+    function setStats(count,avg,label){
+        const tc=document.getElementById('total-count'),as=document.getElementById('avg-score');
+        if(tc)tc.textContent=count.toLocaleString();if(as)as.textContent=avg;
+        const ss=document.getElementById('sheet-stats');
+        if(ss)ss.innerHTML='<strong>'+count.toLocaleString()+'</strong> '+escapeHtml(label)+' · avg <strong>'+avg+'</strong>/10';
+    }
+    function renderSheetList(){
+        const wrap=document.getElementById('sheet-list');if(!wrap)return;
+        if(currentViewMode==='state'){showSheetGuide(filteredState?'state-loading':'start');return}
+        const o=originForDistance();
+        const rows=visibleFacilities().slice();
+        if(o)rows.forEach(r=>{r._dist=(r.latitude!=null&&r.longitude!=null)?haversineMiles(o.lat,o.lng,r.latitude,r.longitude):Infinity});
+        if(o)rows.sort((a,b)=>(a._dist||Infinity)-(b._dist||Infinity));
+        if(!rows.length){
+            const capActive=capabilityCount()>0;
+            if(enforcementOnly&&!capabilityClientFilter(currentFacilities.filter(f=>!!f.has_active_enforcement)).length&&currentFacilities.some(f=>!!f.has_active_enforcement)){showSheetGuide('no-enf');return}
+            if(capActive&&currentFacilities.length){showSheetGuide('no-cap');return}
+            showSheetGuide(enforcementOnly&&currentFacilities.length?'no-enf':'empty');return;
+        }
+        const CAP=60,shown=rows.slice(0,CAP);
+        let html=shown.map(f=>{
+            const cls=f.score_classification||'Unrated',sc=classColor(cls),st=f.final_score!=null?f.final_score.toFixed(1):'—';
+            const dist=(o&&f._dist!=null&&isFinite(f._dist))?'<span class="fdist">'+(f._dist<10?f._dist.toFixed(1):Math.round(f._dist))+' mi</span>':'';
+            const sev=f.has_active_enforcement?normSev(f.enforcement_severity):null;
+            const flag=f.has_active_enforcement?'<span class="sheet-flag'+(sev?' sev-'+SEV_WORD[sev]:'')+'" aria-label="Under active enforcement'+(sev?', '+SEV_WORD[sev]:'')+'">FLAGGED</span>':'';
+            return'<button class="sheet-frow" type="button" data-id="'+escapeHtml(f.facility_id)+'"><span class="sc '+(cls==='Unrated'?'unrated':'')+'" style="background:'+sc+'">'+st+'</span><span class="fmeta"><span class="fnm">'+escapeHtml(f.facility_name||'')+'</span><span class="fsub">'+escapeHtml(TYPE_LABEL[f.facility_type]||'')+' · '+escapeHtml(cls)+'</span></span>'+flag+dist+'</button>';
+        }).join('');
+        if(rows.length>CAP)html+='<div class="sheet-guide" style="padding:14px 10px"><p>Showing the nearest '+CAP+' of '+rows.length.toLocaleString()+'. Zoom in on the map to narrow it down.</p></div>';
+        html+='<div class="sheet-legend">Scores run 1&ndash;10. <span class="lg-dot" style="background:var(--band-exceptional)"></span><span class="lg-dot" style="background:var(--band-average)"></span><span class="lg-dot" style="background:var(--band-poor)"></span> Green is stronger, orange and brick are weaker, an outline means not enough public data to rate.</div>';
+        html+=sheetLinksHtml();
+        wrap.innerHTML=html;
+        wrap.querySelectorAll('.sheet-frow[data-id]').forEach(it=>it.addEventListener('click',()=>{
+            const f=currentFacilities.find(x=>String(x.facility_id)===it.dataset.id);
+            if(f&&f.latitude!=null&&f.longitude!=null)map.setView([f.latitude,f.longitude],Math.max(map.getZoom(),13));
+            openFacilityDetail(it.dataset.id);
+        }));
+    }
+    function showSheetGuide(kind){
+        const wrap=document.getElementById('sheet-list');if(!wrap)return;
+        // MOBILE-CLEAN-1: copy no longer references the removed "Near me" button or
+        // the removed mobile search box. Guidance points at the map + the toggle.
+        let ic='search',h='Find a facility',p='Pan or zoom the map to your area, or tap a state to zoom in. Tap a point to see its quality details.';
+        if(kind==='empty'){ic='map';h='No facilities here yet';p='Zoom out or move the map to find facilities nearby.';}
+        else if(kind==='location-off'){ic='crosshair';h='Location is off';p='No problem — pan the map to your area, or tap a state to zoom in.';}
+        else if(kind==='state-loading'){ic='spinner';h='Loading facilities…';p='One moment.';}
+        else if(kind==='no-types'){ic='filter';h='No types selected';p='Pick at least one facility type above to see results.';}
+        else if(kind==='no-enf'){ic='flag';h='No flagged facilities here';p='None of the facilities in view are under recent CMS enforcement. Move the map to look elsewhere.';}
+        else if(kind==='no-cap'){ic='checklist';h='No facilities match every capability';p='None of the facilities here have all the required capabilities. Move the map to look elsewhere.';}
+        wrap.innerHTML='<div class="sheet-guide">'+icon(ic,ic==='spinner'?'spin':'')+'<h4>'+h+'</h4><p>'+p+'</p></div>'+sheetLinksHtml();
+    }
+    function sheetLinksHtml(){return'<div class="sheet-links"><a href="/about">About</a><a href="/methodology">How we score</a><a href="/medical-disclaimer">Disclaimer</a><a href="/dispute-process">Corrections</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>'}
+    // MOBILE-CLEAN-1: setSheetContent now drives the CSS state machine via the
+    // data-mode attribute on #detail-sheet. data-view (map|list) is held in JS and
+    // applied by setSheetView. No element-hidden juggling beyond the home/detail
+    // panes, which the CSS also toggles by [data-mode] for belt-and-suspenders.
+    function setSheetContent(mode){
+        sheetMode=(mode==='detail')?'detail':'home';
+        const sheet=document.getElementById('detail-sheet');
+        const home=document.getElementById('sheet-home'),detail=document.getElementById('sheet-detail');
+        if(sheet)sheet.setAttribute('data-mode',sheetMode);
+        // ATTRIB-FIX-2: mirror the content mode onto <body> so CSS can hide the
+        // map-anchored Leaflet attribution when a facility DETAIL covers the map.
+        document.body.setAttribute('data-sheet-mode',sheetMode);
+        if(home)home.hidden=(sheetMode==='detail');
+        if(detail)detail.hidden=(sheetMode!=='detail');
+    }
+
+    // ─── Bottom sheet (mobile only) ──────────────────────────────────────────
+    // MOBILE-CLEAN-1: the draggable peek/half/full machinery (getSnapHeights /
+    // applySheetHeight / setSheetSnap / the touch-drag handle) is GONE. Heights are
+    // CSS-driven off the data-view/data-mode attributes. These thin shims remain
+    // only so any stray legacy call site stays safe.
+    function setSheetSnap(){/* no-op: heights are CSS-driven now */}
+    function openBottomSheet(){setSheetView('list')}
+    function closeBottomSheet(){setSheetContent('home');setSheetView('map')}
+    function setupBottomSheetHandle(){/* no-op: no drag handle in v5.6 */}
+
+    function handleViewportResize(){
+        checkMobile();
+        if(isMobile){
+            // Re-assert the CSS state attributes; sheet heights are CSS-driven, but
+            // ATTRIB-FIX-2 measures the real bar height for the attribution lift.
+            // Clear any stray inline height left by an older build.
+            const sheet=document.getElementById('detail-sheet');if(sheet)sheet.style.height='';
+            setSheetContent(sheetMode);
+            setSheetView(sheetView);
+            syncSheetBarMetrics();
+        }else{
+            const sheet=document.getElementById('detail-sheet');if(sheet){sheet.style.height='';sheet.removeAttribute('data-view');sheet.removeAttribute('data-mode')}
+            // ATTRIB-FIX-2: don't let the mobile view/mode signal leak onto the
+            // desktop <body> (the CSS that reads it is mobile-only, but keep it clean).
+            document.body.removeAttribute('data-sheet-view');
+            document.body.removeAttribute('data-sheet-mode');
+        }
+        if(map)map.invalidateSize();
+    }
+
+    function setupOfflineDetection(){const t=document.getElementById('offline-toast');window.addEventListener('offline',()=>{isOnline=false;t.classList.add('active')});window.addEventListener('online',()=>{isOnline=true;t.classList.remove('active');onViewChange()})}
+    function setupKeyboardShortcuts(){document.addEventListener('keydown',e=>{if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&!e.target.closest('input,select,textarea')){e.preventDefault();document.getElementById('name-search')?.focus()}if(e.key==='Escape'&&openFacilityId)closeFacilityInfo()})}
+
+    window.addEventListener('load',()=>{
+        checkMobile();
+        const debouncedResize=debounce(handleViewportResize,150);
+        window.addEventListener('resize',debouncedResize);
+        window.addEventListener('orientationchange',()=>{setTimeout(handleViewportResize,250)});
+        const u=getUrlState();
+        const saved=u.theme||(function(){try{return localStorage.getItem('theme')}catch(e){return null}})()||'light';
+        currentTheme=saved;
+        document.documentElement.setAttribute('data-theme',currentTheme);
+        if(currentTheme==='dark'){
+            const b=document.getElementById('theme-toggle-btn');
+            b.classList.add('active');b.setAttribute('aria-checked','true');
+            b.querySelector('.toggle-slider').innerHTML=icon('moon');
+            document.querySelector('meta[name="theme-color"]').content='#17122A';
+        }
+        initMap();
+        setupOfflineDetection();
+        setupKeyboardShortcuts();
+        if(isMobile){setSheetContent('home');setSheetView('map');renderSheetList();syncSheetBarMetrics()}
+    });
