@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="ForThePatient.org"><g transform="translate(0,0) scale(1.0)">
+  <rect x="7" y="9" width="34" height="30" rx="2" fill="#243447" stroke="#FFF8EE" stroke-width="2" stroke-dasharray="3 2.5"/>
+  <path d="M18 31V17h11v3.5h-7v2.5h6v3.5h-6V31z" fill="#E07A5F"/>
+  <path d="M8 40c6-4 10-4 16 0s10 4 16 0" fill="none" stroke="#FFF8EE" stroke-width="2" stroke-linecap="round"/>
+</g></svg>
