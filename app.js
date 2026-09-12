@@ -236,7 +236,7 @@
     const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
     // ── CARTO basemap key (v1.9.1). Free, 5M tiles/month; request at carto.com/basemaps/apikey.
     // Public by design; restrict it to forthepatient.org in the CARTO dashboard. Empty string = watermarked tiles.
-    const CARTO_KEY='';
+    const CARTO_KEY='cb1_3ii1_1_c246709e7bcf48e0ba0acce9';
     const TILE_ATTR='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a> &middot; CMS public data';
     function tileUrlFor(theme){return'https://{s}.basemaps.cartocdn.com/'+(theme==='dark'?'dark_all':'light_all')+'/{z}/{x}/{y}{r}.png'+(CARTO_KEY?'?key='+encodeURIComponent(CARTO_KEY):'')}
     const STATE_ZOOM=7;
