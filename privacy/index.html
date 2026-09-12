@@ -1,5 +1,5 @@
 <!--
-  ForThePatient.org — Privacy Policy · BRAND-1 (September 11, 2026) · next patch after CONTENT-FIX-1 (Aug 8, 2026)
+  ForThePatient.org — Privacy Policy · BRAND-1 (September 11, 2026) · next patch after CONTENT-FIX-1 (Aug 8, 2026); hotfix: logo text fallback
   RE-SKIN ONLY (⧖D173/⧖D178): design tokens + self-hosted OFL fonts replace the
   cream/blue defaults and the never-loaded 'Inter'; Font Awesome removed (inline
   SVG icons); shared brand header (logo lockup; nav: Find care / How we score /
@@ -135,6 +135,10 @@
         [data-theme="dark"] .logo-img.logo-light{display:none}
         [data-theme="dark"] .logo-img.logo-dark{display:block}
         .footer-brand .logo-img{height:25px}
+        .logo-text{display:none;font-family:var(--font-display);font-weight:800;font-size:1.25rem;letter-spacing:-.02em;color:var(--ink);line-height:1;white-space:nowrap}
+        .logo-text small{font-family:var(--font-text);font-weight:400;font-size:.6em;color:var(--muted);margin-left:2px}
+        .logo-fallback .logo-img{display:none!important}
+        .logo-fallback .logo-text{display:inline}
         .page-footer{flex-direction:column;align-items:flex-start;gap:12px}
         .footer-status{font-size:.85rem;color:var(--text-primary);margin:0}
         .footer-provenance{font-size:.8rem;color:var(--text-secondary);margin:0}
@@ -154,7 +158,7 @@
 <body>
     <header class="header" role="banner">
         <div class="header-inner">
-            <a href="/" class="logo-link" aria-label="ForThePatient.org home"><span class="logo"><img class="logo-img logo-light" src="/brand/logo-primary.svg" alt="" width="131" height="30"><img class="logo-img logo-dark" src="/brand/logo-on-dark.svg" alt="" width="131" height="30"></span></a>
+            <a href="/" class="logo-link" aria-label="ForThePatient.org home"><span class="logo"><img class="logo-img logo-light" src="/brand/logo-primary.svg" alt="" width="131" height="30" onerror="this.closest('.logo').classList.add('logo-fallback')"><img class="logo-img logo-dark" src="/brand/logo-on-dark.svg" alt="" width="131" height="30" onerror="this.closest('.logo').classList.add('logo-fallback')"><span class="logo-text" aria-hidden="true">forthepatient<small>.org</small></span></span></a>
             <div class="header-right">
                 <a class="nav-btn" href="/">Find care</a>
                 <a class="nav-btn" href="/methodology">How we score</a>
